@@ -1,39 +1,92 @@
-# A sample Python project
+# ultraclick
 
-![Python Logo](https://www.python.org/static/community_logos/python-logo.png "Sample inline image")
+**Warning: This is an early hack. There are no unit tests, yet. Maybe not stable!**
 
-A sample project that exists as an aid to the [Python Packaging User
-Guide][packaging guide]'s [Tutorial on Packaging and Distributing
-Projects][distribution tutorial].
+In contrast to plain version of [click](https://github.com/pallets/click), ultraclick allows you to define your CLI using Python classes. ultraclick is based on rich-click which is adding colors to click.
 
-This project does not aim to cover best practices for Python project
-development as a whole. For example, it does not provide guidance or tool
-recommendations for version control, documentation, or testing.
 
-[The source for this project is available here][src].
+## Example
+```
+import pathlib
 
-The metadata for a Python project is defined in the `pyproject.toml` file,
-an example of which is included in this project. You should edit this file
-accordingly to adapt this sample project to your needs.
+import ultraclick as click
 
-----
+class GroupOne:
+    """
+    Subcommands for group1.
+    """
+    def __init__(self, ctx, other):
+        self.other = other
 
-This is the README file for the project.
+    @click.command()
+    @click.argument("name")
+    def greet(self, ctx, name):
+        """Example subcommand: prints a greeting."""
+        env = ctx.obj.get("env", "unknown")
+        return f"Greeting {name} in environment '{env}' with other={self.other}."
 
-The file should use UTF-8 encoding and can be written using
-[reStructuredText][rst] or [markdown][md use] with the appropriate [key set][md
-use]. It will be used to generate the project webpage on PyPI and will be
-displayed as the project homepage on common code-hosting services, and should be
-written for that purpose.
+    @click.command()
+    def farewell(self, ctx):
+        """Example subcommand: says goodbye."""
+        env = ctx.obj.get("env", "unknown")
+        return f"Goodbye from GroupOne. Environment: {env}"
 
-Typical contents for this file would include an overview of the project, basic
-usage examples, etc. Generally, including the project changelog in here is not a
-good idea, although a simple “What's New” section for the most recent version
-may be appropriate.
+class GroupTwo:
+    """
+    Subcommands for group2.
+    """
+    def __init__(self, ctx, docker_flag):
+        ctx.obj = ctx.obj or {}
+        self.docker_flag = docker_flag
 
-[packaging guide]: https://packaging.python.org
-[distribution tutorial]: https://packaging.python.org/tutorials/packaging-projects/
-[src]: https://github.com/pypa/sampleproject
-[rst]: http://docutils.sourceforge.net/rst.html
-[md]: https://tools.ietf.org/html/rfc7764#section-3.5 "CommonMark variant"
-[md use]: https://packaging.python.org/specifications/core-metadata/#description-content-type-optional
+    @click.command()
+    def ping(self, ctx):
+        """Ping subcommand."""
+        return f"Pong from GroupTwo. Docker flag: {self.docker_flag}"
+
+    @click.command()
+    def version(self, ctx):
+        """Show version info from GroupTwo."""
+        return f"GroupTwo version 1.0.0"
+
+class MainGroup:
+    """
+    Main CLI group with top-level commands and subgroups.
+    """
+    group1 = GroupOne
+    group2 = GroupTwo
+
+    @click.option("--env", default="dev", help="Environment to use (e.g., dev, prod).")
+    @click.option("--frontend-dir", default="./frontend", type=pathlib.Path, help="Frontend directory.")
+    @click.option("--docker-dir", default="./docker", type=pathlib.Path, help="Docker directory.")
+    @click.option("--docker-compose-file", default="./docker/docker-compose.yml", type=pathlib.Path, help="Docker compose file.")
+    def __init__(self, ctx, **kwargs):
+        ctx.obj = ctx.obj or {}
+
+        # Assign all keyword arguments dynamically to both self and ctx.obj
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            ctx.obj[key] = value
+
+    @click.command()
+    @click.argument("name")
+    def status(self, ctx, name):
+        """Display the current status."""
+        return f"Environment: {self.env}, Frontend dir: {self.frontend_dir}, Docker dir: {self.docker_dir}"
+
+
+
+# -------------------------------
+# CLI Entry Point
+# -------------------------------
+
+if __name__ == "__main__":
+    try:
+        # Create the CLI using MainGroup
+        cli = click.group_from_class(MainGroup, name="cli")
+        cli(prog_name="dm")
+    except SystemExit:
+        # Handle graceful exit without traceback
+        pass
+
+```
