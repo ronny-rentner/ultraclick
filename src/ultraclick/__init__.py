@@ -9,6 +9,7 @@ import sys
 from functools import partial, wraps
 from types import SimpleNamespace
 
+from click import shell_completion
 import rich
 import rich.console
 import rich_click as click
@@ -42,6 +43,26 @@ class RichCommand(click.RichCommand):
         return result
 
 class RichGroup(click.RichGroup):
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+        matches = [x for x in self.list_commands(ctx)
+                   if x.startswith(cmd_name)]
+        if not matches:
+            return None
+        elif len(matches) == 1:
+            return click.Group.get_command(self, ctx, matches[0])
+
+        output.info(f'\n\n"{cmd_name}" is not unique: {", ".join(matches)}\n')
+        return super().get_command(ctx, cmd_name)
+
+    def resolve_command(self, ctx, args):
+        # always return the full command name
+        _, cmd, args = super().resolve_command(ctx, args)
+        if not cmd:
+            return _, cmd, args
+        return cmd.name, cmd, args
 
     def main(self, *args, **kwargs):
         try:
@@ -140,7 +161,20 @@ class OutputFormatter:
     - Consistent naming for methods: title, main_operation, environment, headline, command, error, failure, success, info, prompt.
     """
 
+    lines = 25
+    columns = 80
+
     def __init__(self):
+        # Rich console should pick up those env variables
+        if 'LINES' in os.environ:
+            self.lines = os.environ["LINES"]
+        else:
+            self.lines = subprocess.run(['tput', 'lines'], capture_output = True, text = True).stdout.strip()
+        if 'COLUMNS' in os.environ:
+            self.columns = os.environ["COLUMNS"]
+        else:
+            self.columns = subprocess.run(['tput', 'cols'], capture_output = True, text = True).stdout.strip()
+
         self.console = rich.console.Console(highlight=False, file=sys.stderr)
         self._original_console_file = self.console.file
         self._silenced = False
@@ -183,6 +217,9 @@ class OutputFormatter:
     def info(self, message):
         self.console.print(message)
 
+    def echo(self, message):
+        self.console.print(message)
+
     def prompt(self, message):
         # Print without newline for user input
         self.console.print(message, end='')
@@ -219,7 +256,9 @@ class OutputFormatter:
         self.command(command)
 
         # Prepare the environment with color support
-        #env = os.environ.copy()
+        env = os.environ.copy()
+        env['LINES'] = self.lines
+        env['COLUMNS'] = self.columns
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
 
@@ -238,7 +277,7 @@ class OutputFormatter:
                 stdout=slave_fd,
                 stderr=slave_fd,
                 text=False,  # Disable text mode; we will decode bytes manually
-                #env=env
+                env=env
             )
 
             # Close the slave descriptor in the parent
@@ -357,5 +396,6 @@ def argument(*param_decls, **kwargs):
 
 # Create a partial function for the click.command decorator
 #command = partial(click.command, cls=Command)
+
 command = partial(click.command, cls=RichCommand)
 output = OutputFormatter()
