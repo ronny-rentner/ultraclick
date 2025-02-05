@@ -5,9 +5,10 @@ import os
 import pty
 import signal
 import subprocess
-import sys
 from functools import partial, wraps
+import sys
 from types import SimpleNamespace
+
 
 from click import shell_completion
 import rich
@@ -245,15 +246,21 @@ class OutputFormatter:
 
         return SilenceContext(self)
 
-    def run_command(self, command, headline=None, suppress=False, error_handling=True, parse_json=False):
+    def run_command(self, command, headline=None, suppress=False, error_handling=True, parse_json=False, silent=False):
         """
         Run a shell command and capture its output, optionally streaming it.
         Simulate a TTY to preserve colored output and interactive behaviors.
         """
         command = command.strip()
+
         if headline:
             self.headline(headline)
-        self.command(command)
+
+        if not silent:
+            self.command(command)
+        else:
+            suppress = True
+            error_handling = False
 
         # Prepare the environment with color support
         env = os.environ.copy()
