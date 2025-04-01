@@ -4,6 +4,41 @@
 
 In contrast to plain version of [click](https://github.com/pallets/click), ultraclick allows you to define your CLI using Python classes. ultraclick is based on rich-click which is adding colors to click.
 
+## Features
+
+- **Class-based CLI structure**: Define your command-line interface using Python classes
+- **Nested command groups**: Organize commands in a hierarchical structure
+- **Automatic context sharing**: Share context between commands in the same class instance
+- **Rich output formatting**: Colored output and better help text formatting via rich-click
+- **Command aliases**: Create alternative names for commands (e.g., `greet` and `hello`)
+- **Command abbreviations**: Type partial commands like `demo u` instead of `demo update` when unambiguous
+- **Automatic return value handling**: Command return values are automatically displayed
+- **Full compatibility**: Supports all features of Click and RichClick
+
+## Installation
+
+To install and run the demo after cloning the repository:
+
+```bash
+# Clone the repository
+git clone https://github.com/ronny-rentner/ultraclick.git
+cd ultraclick
+
+# Create and activate a virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install the package in development mode (will install dependencies automatically)
+pip install -e .
+
+# Run the demo
+python demo.py --help
+# Try other commands
+python demo.py group1 greet World
+python demo.py group1 hello World  # Try the command alias
+python demo.py status test
+```
+
 
 ## Example
 ```

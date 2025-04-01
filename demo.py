@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import pathlib
 
@@ -20,6 +20,9 @@ class GroupOne:
     def greet(self, ctx, name):
         env = ctx.meta.get("env", "unknown")
         return f"Greeting {name} in environment {env} with {self.main} ({self.other})."
+        
+    # Create an alias for the greet command
+    hello = greet
 
     @click.command()
     @click.argument("name")
