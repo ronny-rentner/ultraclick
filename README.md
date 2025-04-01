@@ -33,95 +33,193 @@ pip install -e .
 
 # Run the demo
 python demo.py --help
-# Try other commands
-python demo.py group1 greet World
-python demo.py group1 hello World  # Try the command alias
-python demo.py status test
+# Using global options
+python demo.py --profile production --verbose status  # top-level options affect all commands
+# Try different behaviors with command groups
+python demo.py config          # shows help by default
+python demo.py resource        # executes custom behavior without showing help
+# Command-specific options
+python demo.py resource --resource-type database create mydb --size large --region eu-west
+# Try command aliases
+python demo.py config set debug true
+python demo.py config update debug false  # alias for 'set'
+# Try command abbreviations
+python demo.py r l             # shorthand for 'resource list'
+# Combine options, aliases, and abbreviations
+python demo.py --profile staging r --resource-type storage l
 ```
 
 
 ## Example
-```
+```python
+#!/usr/bin/env python
+"""
+ultraclick Demo Application
+
+This demo systematically showcases ultraclick's main features:
+1. Class-based CLI structure
+2. Nested command groups
+3. Automatic context sharing
+4. Command aliases
+5. Command abbreviations
+6. Automatic return value handling
+"""
+
 import pathlib
+import os
+from typing import Optional, List
 
 import ultraclick as click
 
-class GroupOne:
+
+class ConfigCommand:
     """
-    Subcommands for group1.
+    Configuration commands for the application.
+    Demonstrates context sharing between subcommands.
+    
+    This command group shows help when called directly (default behavior).
     """
-    def __init__(self, ctx, other):
-        self.other = other
+    @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
+    def __init__(self, ctx, config_dir):
+        # Store parameters as instance variables for sharing between commands
+        self.config_dir = config_dir
+        
+        # Get profile from context that was set in the parent MainApp
+        self.profile = ctx.meta.get("profile")
+        
+        # Add config_dir to context.meta for global access
+        ctx.meta["config_dir"] = config_dir
+        
+        # Let the default behavior show help (flag is already True by default)
+
+    @click.command()
+    def show(self, ctx):
+        """Display current configuration settings."""
+        return (
+            f"Active Profile: {self.profile}\n"
+            f"Config Directory: {self.config_dir}"
+        )
+    
+    @click.command()
+    @click.argument("name")
+    @click.argument("value")
+    def set(self, ctx, name, value):
+        """Set a configuration value."""
+        return f"Setting {name}={value} in profile '{self.profile}'"
+    
+    # Command alias demonstration
+    update = set
+    
+    @click.command()
+    @click.argument("name")
+    def get(self, ctx, name):
+        """Get a configuration value."""
+        return f"Getting '{name}' from profile '{self.profile}'"
+    
+    # Another command alias
+    fetch = get
+
+
+class ResourceCommand:
+    """
+    Resource management commands.
+    Demonstrates parameter handling and nested command structure.
+    
+    This command group performs an action when called directly (no help shown).
+    """
+    @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']), 
+                  default="server", help="Type of resource to manage")
+    def __init__(self, ctx, resource_type):
+        self.resource_type = resource_type
+        
+        # Get profile from context that was set in the parent MainApp
+        self.profile = ctx.meta.get("profile")
+        
+        # Custom behavior when no subcommand is provided
+        if ctx.invoked_subcommand is None:
+            # Tell the system not to show help
+            ctx.meta['show_help_on_no_command'] = False
+            
+            # Print our custom message instead
+            click.echo(
+                f"Resource Management Summary:\n"
+                f"• Current Resource Type: {self.resource_type}\n"
+                f"• Available Types: server, database, storage\n"
+                f"• Active Profile: {self.profile}"
+            )
+        
+    @click.command()
+    @click.argument("name")
+    @click.option("--size", default="medium", help="Resource size (small, medium, large)")
+    @click.option("--region", default="us-east", help="Deployment region")
+    def create(self, ctx, name, size, region):
+        """Create a new resource."""
+        return (
+            f"Creating {self.resource_type} '{name}'\n"
+            f"Size: {size}\n"
+            f"Region: {region}\n"
+            f"Using profile: {self.profile}"
+        )
 
     @click.command()
     @click.argument("name")
-    def greet(self, ctx, name):
-        """Example subcommand: prints a greeting."""
-        env = ctx.obj.get("env", "unknown")
-        return f"Greeting {name} in environment '{env}' with other={self.other}."
-
+    def delete(self, ctx, name):
+        """Delete a resource."""
+        return f"Deleting {self.resource_type} '{name}'"
+    
     @click.command()
-    def farewell(self, ctx):
-        """Example subcommand: says goodbye."""
-        env = ctx.obj.get("env", "unknown")
-        return f"Goodbye from GroupOne. Environment: {env}"
+    @click.argument("names", nargs=-1)
+    def list(self, ctx, names):
+        """List resources, optionally filtered by name."""
+        if not names:
+            return f"Listing all {self.resource_type}s (Profile: {self.profile})"
+        else:
+            return f"Filtered {self.resource_type} list: {', '.join(names)} (Profile: {self.profile})"
 
-class GroupTwo:
+
+class MainApp:
     """
-    Subcommands for group2.
+    Main demo application showcasing ultraclick's features.
     """
-    def __init__(self, ctx, docker_flag):
-        ctx.obj = ctx.obj or {}
-        self.docker_flag = docker_flag
-
-    @click.command()
-    def ping(self, ctx):
-        """Ping subcommand."""
-        return f"Pong from GroupTwo. Docker flag: {self.docker_flag}"
-
+    # Define nested command groups
+    config = ConfigCommand
+    resource = ResourceCommand
+    
+    @click.option("--verbose", is_flag=True, help="Enable verbose output")
+    @click.option("--profile", default="default", help="Configuration profile to use")
+    @click.option("--env", default="development", 
+                 type=click.Choice(['development', 'staging', 'production']),
+                 help="Environment to run in")
+    def __init__(self, ctx, verbose, profile, env):
+        self.verbose = verbose
+        self.profile = profile
+        self.env = env
+        
+        # Store in context for global access
+        ctx.meta["verbose"] = verbose
+        ctx.meta["profile"] = profile
+        ctx.meta["env"] = env
+        
+        if verbose:
+            click.echo(f"Verbose mode enabled in {env} environment")
+    
     @click.command()
     def version(self, ctx):
-        """Show version info from GroupTwo."""
-        return f"GroupTwo version 1.0.0"
-
-class MainGroup:
-    """
-    Main CLI group with top-level commands and subgroups.
-    """
-    group1 = GroupOne
-    group2 = GroupTwo
-
-    @click.option("--env", default="dev", help="Environment to use (e.g., dev, prod).")
-    @click.option("--frontend-dir", default="./frontend", type=pathlib.Path, help="Frontend directory.")
-    @click.option("--docker-dir", default="./docker", type=pathlib.Path, help="Docker directory.")
-    @click.option("--docker-compose-file", default="./docker/docker-compose.yml", type=pathlib.Path, help="Docker compose file.")
-    def __init__(self, ctx, **kwargs):
-        ctx.obj = ctx.obj or {}
-
-        # Assign all keyword arguments dynamically to both self and ctx.obj
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-            ctx.obj[key] = value
-
+        """Show application version."""
+        return "ultraclick demo v0.0.1"
+    
     @click.command()
-    @click.argument("name")
-    def status(self, ctx, name):
-        """Display the current status."""
-        return f"Environment: {self.env}, Frontend dir: {self.frontend_dir}, Docker dir: {self.docker_dir}"
+    def status(self, ctx):
+        """Show application status."""
+        return (
+            f"Status: Running\n"
+            f"Environment: {self.env}\n"
+            f"Verbose: {self.verbose}\n"
+            f"Profile: {ctx.meta.get('profile', 'Not set')}"
+        )
 
-
-
-# -------------------------------
-# CLI Entry Point
-# -------------------------------
 
 if __name__ == "__main__":
-    try:
-        # Create the CLI using MainGroup
-        cli = click.group_from_class(MainGroup, name="cli")
-        cli(prog_name="dm")
-    except SystemExit:
-        # Handle graceful exit without traceback
-        pass
-
+    # Create the CLI using MainApp
+    click.group_from_class(MainApp, name="demo")(prog_name="demo")
 ```

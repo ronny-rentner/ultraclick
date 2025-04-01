@@ -116,7 +116,10 @@ def wrap_command_with_context(command_fn, instance_key=None):
 # -------------------------------
 
 def alias_command(alias_name, target_command, alias_help=None):
-    @click.command(name=alias_name, hidden=True)
+    # Copy all parameters from the target command to the alias
+    params = target_command.params
+    
+    @click.command(name=alias_name, params=params, hidden=True, cls=RichCommand)
     @click.pass_context
     def _alias(ctx, *args, **kwargs):
         return ctx.forward(target_command)
@@ -141,13 +144,20 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
     # Construct the instance key
     instance_key = f"{parent_key}.{name}" if parent_key else name
 
-    @click.group(name=name, help=help, cls=RichGroup)
+    @click.group(name=name, help=help, cls=RichGroup, invoke_without_command=True)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
+        # Set a flag in the context that we'll use to decide whether to show help
+        ctx.meta['show_help_on_no_command'] = True
+        
         # Instantiate the class and store it in the context using the instance key
         instance = cls(ctx, *args, **kwargs)
         ctx.meta[instance_key] = instance
+        
+        # If no subcommand was invoked, check if we should show help
+        if ctx.invoked_subcommand is None and ctx.meta.get('show_help_on_no_command', True):
+            click.echo(ctx.get_help())
 
     # Add commands dynamically
     for attr_name in dir(cls):
