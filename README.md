@@ -49,6 +49,51 @@ python demo.py r l             # shorthand for 'resource list'
 python demo.py --profile staging r --resource-type storage l
 ```
 
+## Help Output
+
+Sample help outputs from the demo application:
+
+### Main Help
+```
+ Usage: demo [OPTIONS] COMMAND [ARGS]...                                        
+                                                                                
+ Main demo application showcasing ultraclick's features.                        
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --verbose                                    Enable verbose output           │
+│ --profile    TEXT                            Configuration profile to use    │
+│ --env        [development|staging|productio  Environment to run in           │
+│              n]                                                              │
+│ --help                                       Show this message and exit.     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ config    Configuration commands for the application. Demonstrates context   │
+│           sharing between subcommands.                                       │
+│ resource  Resource management commands. Demonstrates parameter handling and  │
+│           nested command structure.                                          │
+│ status    Show application status.                                           │
+│ version   Show application version.                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Config Command Help
+```
+ Usage: demo config [OPTIONS] COMMAND [ARGS]...                                 
+                                                                                
+ Configuration commands for the application. Demonstrates context sharing       
+ between subcommands.                                                           
+ This command group shows help when called directly (default behavior).         
+                                                                                
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --config-dir    PATH  Configuration directory                                │
+│ --help                Show this message and exit.                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get       Get a configuration value.                                         │
+│ set       Set a configuration value.                                         │
+│ show      Display current configuration settings.                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
 
 ## Example
 ```python
