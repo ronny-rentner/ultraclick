@@ -22,8 +22,7 @@ from click import *
 
 class RichCommand(click.RichCommand):
     """
-    Custom Command class that:
-    1. Automatically prints the return value of the command function.
+    Custom Command class that automatically prints the return value of the command function.
     """
     def invoke(self, ctx):
         # Execute the original invoke method and capture the return value
@@ -94,7 +93,10 @@ class RichGroup(click.RichGroup):
 
 def wrap_command_with_context(command_fn, instance_key=None):
     """
-    Wrap a command function to inject the corresponding group instance `self` into the first argument.
+    Wrap a command function to inject the corresponding group instance `self`
+    into the first argument.
+
+    Handles Click's `@pass_context` to avoid injecting ctx twice.
     """
     @wraps(command_fn)
     @click.pass_context
@@ -102,9 +104,25 @@ def wrap_command_with_context(command_fn, instance_key=None):
         instance = ctx.meta.get(instance_key)
         if not instance:
             raise ValueError(f"Instance for key '{instance_key}' not found in context.")
-        return command_fn(instance, ctx, *args, **kwargs)
+
+        # Unwrap Click's @pass_context wrapper to avoid injecting ctx twice
+        actual_fn = getattr(command_fn, "__wrapped__", command_fn)
+        return actual_fn(instance, ctx, *args, **kwargs)
 
     return wrapped_fn
+
+# -------------------------------
+# Alias command function
+# -------------------------------
+
+def alias_command(alias_name, target_command, alias_help=None):
+    @click.command(name=alias_name, hidden=True)
+    @click.pass_context
+    def _alias(ctx, *args, **kwargs):
+        return ctx.forward(target_command)
+
+    return _alias
+
 
 # -------------------------------
 # Group Creation Function
@@ -137,10 +155,18 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
         if isinstance(attr, click.Command):
             # Wrap the command function with context
             command_fn = attr.callback
+            #TODO: Is it an error if it's not callable?
             if callable(command_fn):
                 wrapped_callback = wrap_command_with_context(command_fn, instance_key=instance_key)
                 attr.callback = wrapped_callback
-            group_cmd.add_command(attr)
+
+            if attr_name != command_fn.__name__:
+                # Alias detected
+                alias_cmd = alias_command(attr_name, attr)
+                group_cmd.add_command(alias_cmd, name=attr_name)
+                continue
+
+            group_cmd.add_command(attr, name=attr_name)
 
         # Handle nested groups
         if isinstance(attr, type) and issubclass(attr, object) and not attr_name.startswith("_"):
@@ -210,7 +236,7 @@ class OutputFormatter:
         self.console.print(f"[bold red]✖[/bold red] {message}")
 
     def success(self, message):
-        self.console.print(f"{message}")
+        self.console.print(f"[bold green]{message}[/bold green]")
 
     def failure(self, message):
         self.console.print(f"[bold red]✖[/bold red] {message}")
