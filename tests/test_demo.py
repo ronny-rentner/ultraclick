@@ -12,9 +12,6 @@ class TestDemoCLI(unittest.TestCase):
     
     def run_command(self, args):
         """Run the demo CLI with the given arguments and return stdout and stderr"""
-        # Make sure demo.py is executable
-        os.chmod(DEMO_SCRIPT, 0o755)
-        
         # Use Python to run the script to ensure it works cross-platform
         cmd = [sys.executable, DEMO_SCRIPT] + args
         
@@ -26,6 +23,12 @@ class TestDemoCLI(unittest.TestCase):
             text=True,
             cwd=PROJECT_ROOT
         )
+        
+        # Print full output details for better debugging
+        print(f"\nCommand: python demo.py {' '.join(args)}")
+        print(f"Return code: {result.returncode}")
+        print(f"STDOUT: {result.stdout}")
+        print(f"STDERR: {result.stderr}")
         
         return result
     
@@ -59,8 +62,12 @@ class TestDemoCLI(unittest.TestCase):
     def test_config_alias_command(self):
         """Test that command aliases work correctly"""
         result = self.run_command(["config", "update", "debug", "false"])
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("Setting debug=false in profile 'default'", result.stdout)
+        try:
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("Setting debug=false in profile 'default'", result.stdout)
+        except AssertionError:
+            print(f"Command failed with stderr: {result.stderr}")
+            raise
     
     def test_resource_list_command(self):
         """Test the resource list command works correctly"""
@@ -82,8 +89,12 @@ class TestDemoCLI(unittest.TestCase):
         """Test that command abbreviations work correctly"""
         # This should resolve to 'resource list'
         result = self.run_command(["r", "l"])
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("Listing all servers (Profile: default)", result.stdout)
+        try:
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("Listing all servers (Profile: default)", result.stdout)
+        except AssertionError:
+            print(f"Command failed with stderr: {result.stderr}")
+            raise
     
     def test_global_options(self):
         """Test that global options affect all commands"""
