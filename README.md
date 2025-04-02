@@ -16,6 +16,7 @@ In contrast to plain version of [click](https://github.com/pallets/click), ultra
 - **Class-based CLI structure**: Define your command-line interface using Python classes
 - **Nested command groups**: Organize commands in a hierarchical structure
 - **Automatic context sharing**: Share context between commands in the same class instance
+- **Context Proxy**: Access the Click context directly with `click.ctx` without passing it as a parameter
 - **Rich output formatting**: Colored output and better help text formatting via rich-click
 - **Command aliases**: Create alternative names for commands (e.g., `greet` and `hello`)
 - **Command abbreviations**: Type partial commands like `demo u` instead of `demo update` when unambiguous
@@ -130,28 +131,29 @@ class ConfigCommand:
     This command group shows help when called directly (default behavior).
     """
     @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
-    def __init__(self, ctx, config_dir):
-        # Store parameters as instance variables for sharing between commands
+    def __init__(self, config_dir):
+        # Store parameters as instance variables
         self.config_dir = config_dir
-
-        # Get profile from context that was set in the parent MainApp
-        self.profile = ctx.meta.get("profile")
-
-        # Add config_dir to context.meta for global access
-        ctx.meta["config_dir"] = config_dir
+        
+        # Access shared data from parent command
+        self.profile = click.ctx.meta["profile"]
+        
+        # Share this command's data with child commands
+        click.ctx.meta["config_dir"] = config_dir
 
     @click.command()
-    def show(self, ctx):
+    def show(self):
         """Display current configuration settings."""
+        path_prefix = './' if not self.config_dir.is_absolute() else ''
         return (
             f"Active Profile: {self.profile}\n"
-            f"Config Directory: {self.config_dir}"
+            f"Config Directory: {path_prefix}{self.config_dir}"
         )
 
     @click.command()
     @click.argument("name")
     @click.argument("value")
-    def set(self, ctx, name, value):
+    def set(self, name, value):
         """Set a configuration value."""
         return f"Setting {name}={value} in profile '{self.profile}'"
 
@@ -160,7 +162,7 @@ class ConfigCommand:
 
     @click.command()
     @click.argument("name")
-    def get(self, ctx, name):
+    def get(self, name):
         """Get a configuration value."""
         return f"Getting '{name}' from profile '{self.profile}'"
 
@@ -177,18 +179,18 @@ class ResourceCommand:
     """
     @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
                   default="server", help="Type of resource to manage")
-    def __init__(self, ctx, resource_type):
+    def __init__(self, resource_type):
         self.resource_type = resource_type
-
-        # Get profile from context that was set in the parent MainApp
-        self.profile = ctx.meta.get("profile")
+        
+        # Access shared data from parent command
+        self.profile = click.ctx.meta["profile"]
 
         # Custom behavior when no subcommand is provided
-        if ctx.invoked_subcommand is None:
-            # Tell the system not to show help
-            ctx.meta['show_help_on_no_command'] = False
-
-            # Print our custom message instead
+        if click.ctx.invoked_subcommand is None:
+            # Prevent automatic help display
+            click.ctx.meta['show_help_on_no_command'] = False
+            
+            # Show custom summary instead
             click.echo(
                 f"Resource Management Summary:\n"
                 f"• Current Resource Type: {self.resource_type}\n"
@@ -200,9 +202,8 @@ class ResourceCommand:
     @click.argument("name")
     @click.option("--size", default="medium", help="Resource size (small, medium, large)")
     @click.option("--region", default="us-east", help="Deployment region")
-    def create(self, ctx, name, size, region):
+    def create(self, name, size, region):
         """Create a new resource."""
-        # Use the profile from instance state instead of context
         return (
             f"Creating {self.resource_type} '{name}'\n"
             f"Size: {size}\n"
@@ -212,15 +213,14 @@ class ResourceCommand:
 
     @click.command()
     @click.argument("name")
-    def delete(self, ctx, name):
+    def delete(self, name):
         """Delete a resource."""
         return f"Deleting {self.resource_type} '{name}'"
 
     @click.command()
     @click.argument("names", nargs=-1)
-    def list(self, ctx, names):
+    def list(self, names):
         """List resources, optionally filtered by name."""
-        # Use instance state for profile
         if not names:
             return f"Listing all {self.resource_type}s (Profile: {self.profile})"
         else:
@@ -240,26 +240,27 @@ class MainApp:
     @click.option("--env", default="development",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
-    def __init__(self, ctx, verbose, profile, env):
+    def __init__(self, verbose, profile, env):
+        # Store options as instance variables
         self.verbose = verbose
         self.profile = profile
         self.env = env
 
-        # Store in context for global access in other classes
-        ctx.meta["verbose"] = verbose
-        ctx.meta["profile"] = profile
-        ctx.meta["env"] = env
+        # Share data with child commands
+        click.ctx.meta["verbose"] = verbose
+        click.ctx.meta["profile"] = profile
+        click.ctx.meta["env"] = env
 
         if verbose:
             click.echo(f"Verbose mode enabled in {env} environment")
 
     @click.command()
-    def version(self, ctx):
+    def version(self):
         """Show application version."""
         return "ultraclick demo v0.0.1"
 
     @click.command()
-    def status(self, ctx):
+    def status(self):
         """Show application status."""
         return (
             f"Status: Running\n"

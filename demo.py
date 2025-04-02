@@ -25,13 +25,13 @@ class ConfigCommand:
     """
     @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
     def __init__(self, config_dir):
-        # Store parameters as instance variables for sharing between commands
+        # Store parameters as instance variables
         self.config_dir = config_dir
-
-        # Get profile from context using ClickContextProxy
-        self.profile = click.ctx.meta.get("profile")
-
-        # Add config_dir to context.meta for global access
+        
+        # Access shared data from parent command
+        self.profile = click.ctx.meta["profile"]
+        
+        # Share this command's data with child commands
         click.ctx.meta["config_dir"] = config_dir
 
     @click.command()
@@ -74,16 +74,16 @@ class ResourceCommand:
                   default="server", help="Type of resource to manage")
     def __init__(self, resource_type):
         self.resource_type = resource_type
-
-        # Get profile from context using ClickContextProxy
-        self.profile = click.ctx.meta.get("profile")
+        
+        # Access shared data from parent command
+        self.profile = click.ctx.meta["profile"]
 
         # Custom behavior when no subcommand is provided
         if click.ctx.invoked_subcommand is None:
-            # Tell the system not to show help
+            # Prevent automatic help display
             click.ctx.meta['show_help_on_no_command'] = False
-
-            # Print our custom message instead
+            
+            # Show custom summary instead
             click.echo(
                 f"Resource Management Summary:\n"
                 f"• Current Resource Type: {self.resource_type}\n"
@@ -136,11 +136,12 @@ class MainApp:
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
     def __init__(self, verbose, profile, env):
+        # Store options as instance variables
         self.verbose = verbose
         self.profile = profile
         self.env = env
 
-        # Store in context for global access in other classes
+        # Share data with child commands
         click.ctx.meta["verbose"] = verbose
         click.ctx.meta["profile"] = profile
         click.ctx.meta["env"] = env
