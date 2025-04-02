@@ -2,12 +2,15 @@ import errno
 import inspect
 import json
 import os
-import pty
 import signal
 import subprocess
 import sys
 from functools import partial, wraps
 from types import SimpleNamespace
+
+# Only import pty on platforms that support it (Unix-like systems)
+if os.name != 'nt':  # Not Windows
+    import pty
 
 import rich
 import rich.console
@@ -287,7 +290,8 @@ class OutputFormatter:
     def run_command(self, command, headline=None, suppress=False, error_handling=True, parse_json=False, silent=False):
         """
         Run a shell command and capture its output, optionally streaming it.
-        Simulate a TTY to preserve colored output and interactive behaviors.
+        Simulate a TTY to preserve colored output and interactive behaviors on Unix systems.
+        Use a simpler approach on Windows.
         """
         command = command.strip()
 
@@ -306,8 +310,33 @@ class OutputFormatter:
         env['COLUMNS'] = self.columns
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
-
-
+            
+        # Use a simpler approach on Windows
+        if os.name == 'nt':
+            result = subprocess.run(command, shell=True, text=True, capture_output=True, env=env)
+            # Handle return code
+            if result.returncode != 0:
+                if not suppress and error_handling:
+                    self.failure(f"Command failed with return code {result.returncode}.")
+                if error_handling:
+                    sys.exit(result.returncode)
+                    
+            # Handle JSON parsing if requested
+            if parse_json:
+                try:
+                    return json.loads(result.stdout)
+                except json.JSONDecodeError as e:
+                    if not suppress:
+                        self.error(f"JSON decode error: {e.msg} at line {e.lineno} column {e.colno}")
+                    return {}
+                    
+            return SimpleNamespace(
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr
+            )
+            
+        # Use PTY on Unix systems
         stdout_bytes = bytearray()
 
         try:
