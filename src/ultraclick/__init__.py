@@ -5,20 +5,39 @@ import os
 import pty
 import signal
 import subprocess
-from functools import partial, wraps
 import sys
+from functools import partial, wraps
 from types import SimpleNamespace
 
-
-from click import shell_completion
 import rich
 import rich.console
 import rich_click as click
 from click import *
+from click import shell_completion
 
-# -------------------------------
-# Custom Command and Group Classes
-# -------------------------------
+
+class ClickContextProxy:
+    """
+    A magic proxy to Click's current context.
+    Allows you to write `ctx.meta["env"]` or `ctx.params["target"]`
+    without manually calling `click.get_current_context()` every time.
+    """
+
+    def __getattr__(self, attr):
+        ctx = click.get_current_context()
+        return getattr(ctx, attr)
+
+    def __getitem__(self, key):
+        ctx = click.get_current_context()
+        return ctx[key]
+
+    def __call__(self, *args, **kwargs):
+        ctx = click.get_current_context()
+        return ctx(*args, **kwargs)
+
+    def __repr__(self):
+        ctx = click.get_current_context()
+        return repr(ctx)
 
 class RichCommand(click.RichCommand):
     """
@@ -87,16 +106,12 @@ class RichGroup(click.RichGroup):
                 exc.ctx = None
             raise exc
 
-# -------------------------------
-# Decorator for Wrapping Commands with Context
-# -------------------------------
-
 def wrap_command_with_context(command_fn, instance_key=None):
     """
     Wrap a command function to inject the corresponding group instance `self`
     into the first argument.
 
-    Handles Click's `@pass_context` to avoid injecting ctx twice.
+    Uses ClickContextProxy instead of passing ctx as a second parameter.
     """
     @wraps(command_fn)
     @click.pass_context
@@ -107,29 +122,20 @@ def wrap_command_with_context(command_fn, instance_key=None):
 
         # Unwrap Click's @pass_context wrapper to avoid injecting ctx twice
         actual_fn = getattr(command_fn, "__wrapped__", command_fn)
-        return actual_fn(instance, ctx, *args, **kwargs)
+        return actual_fn(instance, *args, **kwargs)
 
     return wrapped_fn
-
-# -------------------------------
-# Alias command function
-# -------------------------------
 
 def alias_command(alias_name, target_command, alias_help=None):
     # Copy all parameters from the target command to the alias
     params = target_command.params
-    
+
     @click.command(name=alias_name, params=params, hidden=True, cls=RichCommand)
     @click.pass_context
     def _alias(ctx, *args, **kwargs):
         return ctx.forward(target_command)
 
     return _alias
-
-
-# -------------------------------
-# Group Creation Function
-# -------------------------------
 
 def group_from_class(cls, name=None, help=None, parent_key=None):
     """
@@ -150,11 +156,11 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
     def group_cmd(ctx, *args, **kwargs):
         # Set a flag in the context that we'll use to decide whether to show help
         ctx.meta['show_help_on_no_command'] = True
-        
+
         # Instantiate the class and store it in the context using the instance key
-        instance = cls(ctx, *args, **kwargs)
+        instance = cls(*args, **kwargs)
         ctx.meta[instance_key] = instance
-        
+
         # If no subcommand was invoked, check if we should show help
         if ctx.invoked_subcommand is None and ctx.meta.get('show_help_on_no_command', True):
             click.echo(ctx.get_help())
@@ -185,10 +191,6 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
             group_cmd.add_command(nested_group)
 
     return group_cmd
-
-# -------------------------------
-# Output Formatter Class
-# -------------------------------
 
 class OutputFormatter:
     """
@@ -437,8 +439,6 @@ def argument(*param_decls, **kwargs):
 
     return decorator
 
-# Create a partial function for the click.command decorator
-#command = partial(click.command, cls=Command)
-
 command = partial(click.command, cls=RichCommand)
 output = OutputFormatter()
+ctx = ClickContextProxy()
