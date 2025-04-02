@@ -18,6 +18,8 @@ In contrast to plain version of [click](https://github.com/pallets/click), ultra
 - **Automatic context sharing**: Share context between commands in the same class instance
 - **Context Proxy**: Access the Click context directly with `click.ctx` without passing it as a parameter
 - **Rich output formatting**: Colored output and better help text formatting via rich-click
+- **Interactive command execution**: Preserves colors, progress bars, and interactive output from subprocesses
+- **Cross-platform compatibility**: Works on Unix, macOS, and Windows
 - **Command aliases**: Create alternative names for commands (e.g., `greet` and `hello`)
 - **Command abbreviations**: Type partial commands like `demo u` instead of `demo update` when unambiguous
 - **Automatic return value handling**: Command return values are automatically displayed
