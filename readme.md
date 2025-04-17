@@ -183,8 +183,8 @@ class ConfigCommand:
         """Set a configuration value."""
         return f"Setting {name}={value} in profile '{self.profile}'"
 
-    # Command alias demonstration - simple approach
-    update = set
+    # Command alias demonstration - using decorator approach
+    update = click.alias(set)
 
     @click.command()
     @click.argument("name")
@@ -192,8 +192,8 @@ class ConfigCommand:
         """Get a configuration value."""
         return f"Getting '{name}' from profile '{self.profile}'"
 
-    # Another command alias - simple approach
-    fetch = get
+    # Another command alias - using decorator approach
+    fetch = click.alias(get)
 
 
 class ResourceCommand:
