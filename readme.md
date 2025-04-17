@@ -15,6 +15,7 @@ A powerful class-based wrapper for building elegant command-line interfaces in P
 
 - [Features](#features)
 - [Installation](#installation)
+- [Demo Application](#demo-application)
 - [Help Output](#help-output)
 - [Demo Code](#demo-code)
 
@@ -42,8 +43,6 @@ pip install ultraclick
 
 ### From Source
 
-To install and run the demo from source:
-
 ```bash
 # Clone the repository
 git clone https://github.com/ronny-rentner/ultraclick.git
@@ -55,21 +54,33 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install the package in development mode (will install dependencies automatically)
 pip install -e .
+```
 
-# Run the demo
+## Demo Application
+
+The repository includes a comprehensive demo that showcases ultraclick's features. After installation, try the following commands:
+
+```bash
+# View available commands
 python demo.py --help
+
 # Using global options
 python demo.py --profile production --verbose status  # top-level options affect all commands
+
 # Try different behaviors with command groups
 python demo.py config          # shows help by default
 python demo.py resource        # executes custom behavior without showing help
+
 # Command-specific options
 python demo.py resource --resource-type database create mydb --size large --region eu-west
+
 # Try command aliases
 python demo.py config set debug true
 python demo.py config update debug false  # alias for 'set'
+
 # Try command abbreviations
 python demo.py r l             # shorthand for 'resource list'
+
 # Combine options, aliases, and abbreviations
 python demo.py --profile staging r --resource-type storage l
 ```
