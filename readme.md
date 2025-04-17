@@ -58,27 +58,14 @@ pip install -e .
 The repository includes a comprehensive demo that showcases ultraclick's features. After installation and activating your virtual environment, try the following commands:
 
 ```bash
-# View available commands
 ./demo.py --help
-
-# Using global options
-./demo.py --profile production --verbose status  # top-level options affect all commands
-
-# Try different behaviors with command groups
-./demo.py config          # shows help by default
-./demo.py resource        # executes custom behavior without showing help
-
-# Command-specific options
+./demo.py --profile production --verbose status
+./demo.py config
+./demo.py resource
 ./demo.py resource --resource-type database create mydb --size large --region eu-west
-
-# Try command aliases
 ./demo.py config set debug true
-./demo.py config update debug false  # alias for 'set'
-
-# Try command abbreviations
-./demo.py r l             # shorthand for 'resource list'
-
-# Combine options, aliases, and abbreviations
+./demo.py config update debug false
+./demo.py r l
 ./demo.py --profile staging r --resource-type storage l
 ```
 
