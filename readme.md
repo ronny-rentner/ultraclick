@@ -4,13 +4,6 @@ A powerful class-based wrapper for building elegant command-line interfaces in P
 
 **ultraclick** is a Python library that extends the popular [click](https://github.com/pallets/click) framework, enabling you to create structured CLI applications using object-oriented principles. It integrates [rich-click](https://github.com/ewels/rich-click) for beautiful color formatting and enhanced readability.
 
-## Why ultraclick?
-
-* **Class-based architecture**: Organize commands logically in classes instead of nested functions
-* **Intuitive context sharing**: Share state between commands naturally via instance attributes
-* **Clean, maintainable code**: Group related commands together with proper encapsulation
-* **Beautiful output**: Rich formatting with colors and improved help text
-
 ## Table of Contents
 
 - [Features](#features)
@@ -21,16 +14,20 @@ A powerful class-based wrapper for building elegant command-line interfaces in P
 
 ## Features
 
+**ultraclick** offers significant advantages over function-based CLI frameworks:
+
 - **Class-based CLI structure**: Define your command-line interface using Python classes
 - **Nested command groups**: Organize commands in a hierarchical structure
-- **Automatic context sharing**: Share context between commands in the same class instance
+- **Class instance state**: Share data between commands naturally via instance attributes
 - **Context Proxy**: Access the Click context directly with `click.ctx` without passing it as a parameter
+- **Context sharing**: Share context data between different command levels via `ctx.meta`
 - **Rich output formatting**: Colored output and better help text formatting via rich-click
 - **Interactive command execution**: Preserves colors, progress bars, and interactive output from subprocesses
 - **Cross-platform compatibility**: Works on Unix, macOS, and Windows
 - **Command aliases**: Create alternative names for commands (e.g., `greet` and `hello`)
 - **Command abbreviations**: Type partial commands like `demo u` instead of `demo update` when unambiguous
 - **Automatic return value handling**: Command return values are automatically displayed
+- **Clean, maintainable code**: Group related commands together with proper encapsulation
 - **Full compatibility**: Supports all features of Click and RichClick
 
 ## Installation
@@ -58,31 +55,31 @@ pip install -e .
 
 ## Demo Application
 
-The repository includes a comprehensive demo that showcases ultraclick's features. After installation, try the following commands:
+The repository includes a comprehensive demo that showcases ultraclick's features. After installation and activating your virtual environment, try the following commands:
 
 ```bash
 # View available commands
-python demo.py --help
+./demo.py --help
 
 # Using global options
-python demo.py --profile production --verbose status  # top-level options affect all commands
+./demo.py --profile production --verbose status  # top-level options affect all commands
 
 # Try different behaviors with command groups
-python demo.py config          # shows help by default
-python demo.py resource        # executes custom behavior without showing help
+./demo.py config          # shows help by default
+./demo.py resource        # executes custom behavior without showing help
 
 # Command-specific options
-python demo.py resource --resource-type database create mydb --size large --region eu-west
+./demo.py resource --resource-type database create mydb --size large --region eu-west
 
 # Try command aliases
-python demo.py config set debug true
-python demo.py config update debug false  # alias for 'set'
+./demo.py config set debug true
+./demo.py config update debug false  # alias for 'set'
 
 # Try command abbreviations
-python demo.py r l             # shorthand for 'resource list'
+./demo.py r l             # shorthand for 'resource list'
 
 # Combine options, aliases, and abbreviations
-python demo.py --profile staging r --resource-type storage l
+./demo.py --profile staging r --resource-type storage l
 ```
 
 ## Help Output
