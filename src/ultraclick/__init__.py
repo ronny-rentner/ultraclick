@@ -8,15 +8,15 @@ import sys
 from functools import partial, wraps
 from types import SimpleNamespace
 
-# Only import pty on platforms that support it (Unix-like systems)
-if os.name != 'nt':  # Not Windows
-    import pty
-
 import rich
 import rich.console
 import rich_click as click
 from click import *
 from click import shell_completion
+
+# Only import pty on platforms that support it (Unix-like systems)
+if os.name != 'nt':  # Not Windows
+    import pty
 
 
 class ClickContextProxy:
@@ -42,10 +42,17 @@ class ClickContextProxy:
         ctx = click.get_current_context()
         return repr(ctx)
 
+ctx = ClickContextProxy()
+
 class RichCommand(click.RichCommand):
     """
     Custom Command class that automatically prints the return value of the command function.
     """
+
+    def __init__(self, *args, alias=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.alias = alias
+
     def invoke(self, ctx):
         # Execute the original invoke method and capture the return value
         result = super().invoke(ctx)
@@ -76,12 +83,14 @@ class RichGroup(click.RichGroup):
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
 
-        output.info(f'\n\n"{cmd_name}" is not unique: {", ".join(matches)}\n')
+        click.echo(f'\n\n"{cmd_name}" is not unique: {", ".join(matches)}\n')
         return super().get_command(ctx, cmd_name)
 
     def resolve_command(self, ctx, args):
+        #output.info(f"resolve_command - args: {args}")
         # always return the full command name
         _, cmd, args = super().resolve_command(ctx, args)
+        #output.info(f"resolve_command -  {_} {cmd} {args}")
         if not cmd:
             return _, cmd, args
         return cmd.name, cmd, args
@@ -138,9 +147,18 @@ def alias_command(alias_name, target_command, alias_help=None):
     def _alias(ctx, *args, **kwargs):
         return ctx.forward(target_command)
 
+    _alias.callback.__name__ = alias_name
+
     return _alias
 
-def group_from_class(cls, name=None, help=None, parent_key=None):
+def alias(cmd):
+    @click.command(params=cmd.params, hidden=True, cls=RichCommand, alias=True)
+    @click.pass_context
+    def _alias(self, *args, **kwargs):
+        return click.get_current_context().forward(cmd)
+    return _alias
+
+def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_meta=None):
     """
     Dynamically create a Click group from a class.
     Utilizes the AutoPrintGroup to enable automatic printing of command return values.
@@ -157,6 +175,10 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
+
+        if not ctx.meta and initial_ctx_meta:
+            ctx.meta.update(initial_ctx_meta)
+
         # Set a flag in the context that we'll use to decide whether to show help
         ctx.meta['show_help_on_no_command'] = True
 
@@ -179,13 +201,16 @@ def group_from_class(cls, name=None, help=None, parent_key=None):
                 wrapped_callback = wrap_command_with_context(command_fn, instance_key=instance_key)
                 attr.callback = wrapped_callback
 
-            if attr_name != command_fn.__name__:
-                # Alias detected
-                alias_cmd = alias_command(attr_name, attr)
-                group_cmd.add_command(alias_cmd, name=attr_name)
+            #if attr_name != command_fn.__name__:
+            if attr.alias:
+                #print('alias: ', attr, attr_name, getattr(attr, 'name', attr_name), command_fn.__name__)
+                #alias_cmd = alias_command(attr_name, attr)
+                group_cmd.add_command(attr, name=attr_name)
                 continue
 
-            group_cmd.add_command(attr, name=attr_name)
+            #print('add_command: ', attr, '1', attr_name, '2', getattr(attr, 'name', ''), '3', command_fn.__name__)
+            # name parameter has priority, otherwise take the command function name
+            group_cmd.add_command(attr, name=getattr(attr, 'name', attr_name))
 
         # Handle nested groups
         if isinstance(attr, type) and issubclass(attr, object) and not attr_name.startswith("_"):
@@ -250,6 +275,9 @@ class OutputFormatter:
     def error(self, message):
         self.console.print(f"[bold red]✖[/bold red] {message}")
 
+    def warning(self, message):
+        self.console.print(f"[bold yellow]✖[/bold yellow] {message}")
+
     def success(self, message):
         self.console.print(f"[bold green]{message}[/bold green]")
 
@@ -310,7 +338,7 @@ class OutputFormatter:
         env['COLUMNS'] = self.columns
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
-            
+
         # Use a simpler approach on Windows
         if os.name == 'nt':
             result = subprocess.run(command, shell=True, text=True, capture_output=True, env=env)
@@ -320,7 +348,7 @@ class OutputFormatter:
                     self.failure(f"Command failed with return code {result.returncode}.")
                 if error_handling:
                     sys.exit(result.returncode)
-                    
+
             # Handle JSON parsing if requested
             if parse_json:
                 try:
@@ -329,13 +357,13 @@ class OutputFormatter:
                     if not suppress:
                         self.error(f"JSON decode error: {e.msg} at line {e.lineno} column {e.colno}")
                     return {}
-                    
+
             return SimpleNamespace(
                 returncode=result.returncode,
                 stdout=result.stdout,
                 stderr=result.stderr
             )
-            
+
         # Use PTY on Unix systems
         stdout_bytes = bytearray()
 
@@ -470,4 +498,3 @@ def argument(*param_decls, **kwargs):
 
 command = partial(click.command, cls=RichCommand)
 output = OutputFormatter()
-ctx = ClickContextProxy()

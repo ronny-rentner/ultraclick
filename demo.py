@@ -27,10 +27,10 @@ class ConfigCommand:
     def __init__(self, config_dir):
         # Store parameters as instance variables
         self.config_dir = config_dir
-        
+
         # Access shared data from parent command
         self.profile = click.ctx.meta["profile"]
-        
+
         # Share this command's data with child commands
         click.ctx.meta["config_dir"] = config_dir
 
@@ -74,7 +74,7 @@ class ResourceCommand:
                   default="server", help="Type of resource to manage")
     def __init__(self, resource_type):
         self.resource_type = resource_type
-        
+
         # Access shared data from parent command
         self.profile = click.ctx.meta["profile"]
 
@@ -82,7 +82,7 @@ class ResourceCommand:
         if click.ctx.invoked_subcommand is None:
             # Prevent automatic help display
             click.ctx.meta['show_help_on_no_command'] = False
-            
+
             # Show custom summary instead
             click.echo(
                 f"Resource Management Summary:\n"
@@ -135,6 +135,7 @@ class MainApp:
     @click.option("--env", default="development",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
+    @click.version_option(version="1.0")
     def __init__(self, verbose, profile, env):
         # Store options as instance variables
         self.verbose = verbose
@@ -147,12 +148,7 @@ class MainApp:
         click.ctx.meta["env"] = env
 
         if verbose:
-            click.echo(f"Verbose mode enabled in {env} environment")
-
-    @click.command()
-    def version(self):
-        """Show application version."""
-        return "ultraclick demo v0.0.1"
+            click.output.success(f"Verbose mode enabled in {env} environment")
 
     @click.command()
     def status(self):
@@ -164,5 +160,7 @@ class MainApp:
             f"Profile: {self.profile}"
         )
 
+    info=click.alias(status)
+
 if __name__ == "__main__":
-    click.group_from_class(MainApp, name="demo")(prog_name="demo")
+    click.group_from_class(MainApp, name="demo")()

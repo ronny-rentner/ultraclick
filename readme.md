@@ -1,8 +1,15 @@
 # ultraclick
 
-**Warning: This is an early hack. There are no unit tests, yet. Maybe not stable!**
+A powerful class-based wrapper for building elegant command-line interfaces in Python.
 
-In contrast to plain version of [click](https://github.com/pallets/click), ultraclick allows you to define your CLI using Python classes. ultraclick is based on rich-click which is adding colors to click.
+**ultraclick** is a Python library that extends the popular [click](https://github.com/pallets/click) framework, enabling you to create structured CLI applications using object-oriented principles. It integrates [rich-click](https://github.com/ewels/rich-click) for beautiful color formatting and enhanced readability.
+
+## Why ultraclick?
+
+* **Class-based architecture**: Organize commands logically in classes instead of nested functions
+* **Intuitive context sharing**: Share state between commands naturally via instance attributes
+* **Clean, maintainable code**: Group related commands together with proper encapsulation
+* **Beautiful output**: Rich formatting with colors and improved help text
 
 ## Table of Contents
 
@@ -27,7 +34,15 @@ In contrast to plain version of [click](https://github.com/pallets/click), ultra
 
 ## Installation
 
-To install and run the demo after cloning the repository:
+### From PyPI (recommended)
+
+```bash
+pip install ultraclick
+```
+
+### From Source
+
+To install and run the demo from source:
 
 ```bash
 # Clone the repository
@@ -106,6 +121,9 @@ Sample help outputs from the demo application:
 ```
 
 ## Demo Code
+
+Check out [gwctl](https://github.com/ronny-rentner/gwctl) for a real-world application built with ultraclick.
+
 ```python
 #!/usr/bin/env python
 """
@@ -159,7 +177,7 @@ class ConfigCommand:
         """Set a configuration value."""
         return f"Setting {name}={value} in profile '{self.profile}'"
 
-    # Command alias demonstration
+    # Command alias demonstration - simple approach
     update = set
 
     @click.command()
@@ -168,7 +186,7 @@ class ConfigCommand:
         """Get a configuration value."""
         return f"Getting '{name}' from profile '{self.profile}'"
 
-    # Another command alias
+    # Another command alias - simple approach
     fetch = get
 
 
@@ -257,11 +275,6 @@ class MainApp:
             click.echo(f"Verbose mode enabled in {env} environment")
 
     @click.command()
-    def version(self):
-        """Show application version."""
-        return "ultraclick demo v0.0.1"
-
-    @click.command()
     def status(self):
         """Show application status."""
         return (
@@ -270,6 +283,14 @@ class MainApp:
             f"Verbose: {self.verbose}\n"
             f"Profile: {self.profile}"
         )
+    
+    # Command alias using the decorator approach
+    info=click.alias(status)
+
+    @click.command()
+    def version(self):
+        """Show application version."""
+        return "ultraclick demo v0.1.0"
 
 if __name__ == "__main__":
     click.group_from_class(MainApp, name="demo")(prog_name="demo")
