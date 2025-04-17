@@ -69,6 +69,16 @@ The repository includes a comprehensive demo that showcases ultraclick's feature
 ./demo.py --profile staging r --resource-type storage l
 ```
 
+### Tab Completion
+
+Enable tab completion for the demo application in Bash:
+
+```bash
+eval "$(_DEMO_PY_COMPLETE=bash_source python ./demo.py)"
+```
+
+Now you can use Tab to complete commands, options, and arguments.
+
 ## Help Output
 
 Sample help outputs from the demo application:
@@ -84,15 +94,16 @@ Sample help outputs from the demo application:
 │ --profile    TEXT                            Configuration profile to use    │
 │ --env        [development|staging|productio  Environment to run in           │
 │              n]                                                              │
+│ --version                                    Show the version and exit.      │
 │ --help                                       Show this message and exit.     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ config    Configuration commands for the application. Demonstrates context   │
 │           sharing between subcommands.                                       │
+│ info      Show application status.                                           │
 │ resource  Resource management commands. Demonstrates parameter handling and  │
 │           nested command structure.                                          │
 │ status    Show application status.                                           │
-│ version   Show application version.                                          │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -255,6 +266,7 @@ class MainApp:
     @click.option("--env", default="development",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
+    @click.version_option(version="1.0")
     def __init__(self, verbose, profile, env):
         # Store options as instance variables
         self.verbose = verbose
@@ -267,7 +279,7 @@ class MainApp:
         click.ctx.meta["env"] = env
 
         if verbose:
-            click.echo(f"Verbose mode enabled in {env} environment")
+            click.output.success(f"Verbose mode enabled in {env} environment")
 
     @click.command()
     def status(self):
@@ -282,11 +294,6 @@ class MainApp:
     # Command alias using the decorator approach
     info=click.alias(status)
 
-    @click.command()
-    def version(self):
-        """Show application version."""
-        return "ultraclick demo v0.1.0"
-
 if __name__ == "__main__":
-    click.group_from_class(MainApp, name="demo")(prog_name="demo")
+    click.group_from_class(MainApp, name="demo")()
 ```
