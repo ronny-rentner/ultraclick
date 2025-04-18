@@ -158,10 +158,17 @@ def alias(cmd):
         return click.get_current_context().forward(cmd)
     return _alias
 
-def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_meta=None):
+def group_from_class(cls, name=None, help=None, parent_key=None, context_settings=None):
     """
     Dynamically create a Click group from a class.
-    Utilizes the AutoPrintGroup to enable automatic printing of command return values.
+    Utilizes the RichGroup to enable automatic printing of command return values.
+    
+    Args:
+        cls: The class to convert into a Click group
+        name: The name of the command (defaults to lowercase class name)
+        help: Help text for the command (defaults to class docstring)
+        parent_key: Key to use for parent command in context metadata
+        context_settings: Dict with context settings like 'meta', 'allow_interspersed_args', etc.
     """
     if name is None:
         name = cls.__name__.lower()
@@ -170,14 +177,17 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
 
     # Construct the instance key
     instance_key = f"{parent_key}.{name}" if parent_key else name
+    
+    # Prepare context settings
+    settings = {"allow_interspersed_args": True}
+    if context_settings:
+        settings.update(context_settings)
 
-    @click.group(name=name, help=help, cls=RichGroup, invoke_without_command=True)
+    @click.group(name=name, help=help, cls=RichGroup, invoke_without_command=True, 
+                context_settings=settings)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
-
-        if not ctx.meta and initial_ctx_meta:
-            ctx.meta.update(initial_ctx_meta)
 
         # Set a flag in the context that we'll use to decide whether to show help
         ctx.meta['show_help_on_no_command'] = True

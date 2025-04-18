@@ -103,6 +103,20 @@ class TestDemoCLI(unittest.TestCase):
         result = self.run_command(["--profile", "production", "status"])
         self.assertEqual(result.returncode, 0)
         self.assertIn("Profile: production", result.stdout)
+    
+    def test_allow_interspersed_args(self):
+        """Test that options can be specified after commands"""
+        # Test options before command (traditional style)
+        result_before = self.run_command(["--verbose", "status"])
+        self.assertEqual(result_before.returncode, 0)
+        self.assertIn("Verbose: True", result_before.stdout)
+        self.assertIn("Verbose mode enabled", result_before.stderr)
+        
+        # Test options after command (requires allow_interspersed_args=True)
+        result_after = self.run_command(["status", "--verbose"])
+        self.assertEqual(result_after.returncode, 0)
+        self.assertIn("Verbose: True", result_after.stdout)
+        self.assertIn("Verbose mode enabled", result_after.stderr)
 
 if __name__ == '__main__':
     unittest.main()

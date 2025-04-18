@@ -25,14 +25,11 @@ class ConfigCommand:
     """
     @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
     def __init__(self, config_dir):
-        # Store parameters as instance variables
+        # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
 
-        # Access shared data from parent command
+        # Access shared data from global context
         self.profile = click.ctx.meta["profile"]
-
-        # Share this command's data with child commands
-        click.ctx.meta["config_dir"] = config_dir
 
     @click.command()
     def show(self):
@@ -130,7 +127,7 @@ class MainApp:
     config = ConfigCommand
     resource = ResourceCommand
 
-    @click.option("--verbose", is_flag=True, help="Enable verbose output")
+    @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
     @click.option("--profile", default="default", help="Configuration profile to use")
     @click.option("--env", default="development",
                  type=click.Choice(['development', 'staging', 'production']),
@@ -142,7 +139,7 @@ class MainApp:
         self.profile = profile
         self.env = env
 
-        # Share data with child commands
+        # Store settings in global state
         click.ctx.meta["verbose"] = verbose
         click.ctx.meta["profile"] = profile
         click.ctx.meta["env"] = env
@@ -160,7 +157,9 @@ class MainApp:
             f"Profile: {self.profile}"
         )
 
+    # 'info' is an alias for the 'status' command
     info=click.alias(status)
 
 if __name__ == "__main__":
+    # Context settings are now included by default in group_from_class
     click.group_from_class(MainApp, name="demo")()

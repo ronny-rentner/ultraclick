@@ -126,6 +126,20 @@ Sample help outputs from the demo application:
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
+## Tips
+
+### Flexible Parameter Ordering
+
+By default, Click only allows `./demo.py --verbose status` but not `./demo.py status --verbose`. 
+
+To enable both patterns, use the `allow_interspersed_args` context setting:
+
+```python
+cli = click.group_from_class(MainApp, context_settings={"allow_interspersed_args": True})
+```
+
+This is enabled by default in ultraclick.
+
 ## Demo Code
 
 Check out [gwctl](https://github.com/ronny-rentner/gwctl) for a real-world application built with ultraclick.
