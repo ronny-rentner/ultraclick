@@ -132,13 +132,28 @@ Sample help outputs from the demo application:
 
 By default, Click only allows `./demo.py --verbose status` but not `./demo.py status --verbose`. 
 
-To enable both patterns, use the `allow_interspersed_args` context setting:
+For simple CLI applications, you can enable flexibility in option ordering with the `allow_interspersed_args` context setting:
 
 ```python
-cli = click.group_from_class(MainApp, context_settings={"allow_interspersed_args": True})
+@click.main_group(context_settings={"allow_interspersed_args": True})
+class MainApp:
+    # ...
 ```
 
-This is enabled by default in ultraclick.
+**Important note:** Use this setting with caution, as it can interfere with option parsing in nested command structures. When working with multiple levels of subcommands that have their own options, it's generally better to keep this setting disabled (the default behavior).
+
+### Class Decorators
+
+ultraclick supports class decorators for defining command-line interfaces:
+
+```python
+@click.main_group(name="demo")
+class MainApp:
+    # commands and options here
+    
+if __name__ == "__main__":
+    MainApp()
+```
 
 ## Demo Code
 

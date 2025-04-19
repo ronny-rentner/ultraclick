@@ -76,17 +76,17 @@ class ResourceCommand:
         self.profile = click.ctx.meta["profile"]
 
         # Custom behavior when no subcommand is provided
-        if click.ctx.invoked_subcommand is None:
-            # Prevent automatic help display
-            click.ctx.meta['show_help_on_no_command'] = False
+        # if click.ctx.invoked_subcommand is None:
+        #     # Prevent automatic help display
+        #     click.ctx.meta['show_help_on_no_command'] = False
 
-            # Show custom summary instead
-            click.echo(
-                f"Resource Management Summary:\n"
-                f"• Current Resource Type: {self.resource_type}\n"
-                f"• Available Types: server, database, storage\n"
-                f"• Active Profile: {self.profile}"
-            )
+        #     # Show custom summary instead
+        #     click.echo(
+        #         f"Resource Management Summary:\n"
+        #         f"• Current Resource Type: {self.resource_type}\n"
+        #         f"• Available Types: server, database, storage\n"
+        #         f"• Active Profile: {self.profile}"
+        #     )
 
     @click.command()
     @click.argument("name")
@@ -119,6 +119,7 @@ class ResourceCommand:
             return f"Filtered {self.resource_type} list: {', '.join(names)} (Profile: {self.profile})"
 
 
+@click.main_group(name="demo")
 class MainApp:
     """
     Main demo application showcasing ultraclick's features.
@@ -161,5 +162,4 @@ class MainApp:
     info=click.alias(status)
 
 if __name__ == "__main__":
-    # Context settings are now included by default in group_from_class
-    click.group_from_class(MainApp, name="demo")()
+    MainApp()

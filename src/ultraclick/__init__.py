@@ -158,11 +158,20 @@ def alias(cmd):
         return click.get_current_context().forward(cmd)
     return _alias
 
-def group_from_class(cls, name=None, help=None, parent_key=None, context_settings=None):
+def main_group(*args, **kwargs):
     """
-    Dynamically create a Click group from a class.
-    Utilizes the RichGroup to enable automatic printing of command return values.
-    
+    Convenience class decorator for creating a command group from a class.
+
+    Accepts the same parameters as group_from_class() but can be used as a decorator.
+    """
+    def decorator(cls):
+        return group_from_class(cls, *args, **kwargs)
+    return decorator
+
+def group_from_class(cls, name=None, help=None, parent_key=None, **kwargs):
+    """
+    Dynamically create a Click command group from a class.
+
     Args:
         cls: The class to convert into a Click group
         name: The name of the command (defaults to lowercase class name)
@@ -177,14 +186,13 @@ def group_from_class(cls, name=None, help=None, parent_key=None, context_setting
 
     # Construct the instance key
     instance_key = f"{parent_key}.{name}" if parent_key else name
-    
-    # Prepare context settings
-    settings = {"allow_interspersed_args": True}
-    if context_settings:
-        settings.update(context_settings)
 
-    @click.group(name=name, help=help, cls=RichGroup, invoke_without_command=True, 
-                context_settings=settings)
+    if not 'invoke_without_command' in kwargs:
+        kwargs['invoke_without_command'] = True
+    if not 'context_settings' in kwargs:
+        kwargs['context_settings'] = {}
+
+    @click.group(name=name, help=help, cls=RichGroup, **kwargs)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
