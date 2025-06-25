@@ -90,10 +90,10 @@ class RichGroup(click.RichGroup):
         return super().get_command(ctx, cmd_name)
 
     def resolve_command(self, ctx, args):
-        #output.info(f"resolve_command - args: {args}")
+        #output.info(f"resolve_command1 - args: {args}")
         # always return the full command name
         _, cmd, args = super().resolve_command(ctx, args)
-        #output.info(f"resolve_command -  {_} {cmd} {args}")
+        #output.info(f"resolve_command2 -  {_} {cmd} {args}")
         if not cmd:
             return _, cmd, args
         return cmd.name, cmd, args
@@ -190,10 +190,19 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     # Construct the instance key
     instance_key = f"{parent_key}.{name}" if parent_key else name
 
-    if not 'invoke_without_command' in kwargs:
-        kwargs['invoke_without_command'] = True
+    # Adjust some default group settings
+    kwargs.setdefault('invoke_without_command',  True)
 
-    @click.group(name=name, help=help, cls=RichGroup, **kwargs)
+    context_settings = kwargs.setdefault('context_settings', {})
+    context_settings.setdefault('allow_interspersed_args', True)
+
+    # TODO: It's strange that we have to set these two options and they seem
+    #       to not do what they say but merely make `allow_interspersed_args` actually work
+    context_settings.setdefault('ignore_unknown_options',  True)
+    context_settings.setdefault('allow_extra_args',        True)
+
+
+    @click.group(name=name, help=help, cls=RichGroup,  **kwargs)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
@@ -237,7 +246,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         # Handle nested groups
         if isinstance(attr, type) and issubclass(attr, object) and not attr_name.startswith("_"):
             # Nested group class
-            nested_group = group_from_class(attr, name=attr_name.lower(), parent_key=instance_key)
+            nested_group = group_from_class(attr, name=attr_name.lower(), parent_key=instance_key, **kwargs)
             group_cmd.add_command(nested_group)
 
     return group_cmd
