@@ -14,9 +14,12 @@ import rich_click as click
 from click import *
 from click import shell_completion
 
+import codecs
+
 # Only import pty on platforms that support it (Unix-like systems)
 if os.name != 'nt':  # Not Windows
     import pty
+    import termios
 
 
 class ClickContextProxy:
@@ -168,7 +171,7 @@ def main_group(*args, **kwargs):
         return group_from_class(cls, *args, **kwargs)
     return decorator
 
-def group_from_class(cls, name=None, help=None, parent_key=None, **kwargs):
+def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_meta=None, **kwargs):
     """
     Dynamically create a Click command group from a class.
 
@@ -189,13 +192,14 @@ def group_from_class(cls, name=None, help=None, parent_key=None, **kwargs):
 
     if not 'invoke_without_command' in kwargs:
         kwargs['invoke_without_command'] = True
-    if not 'context_settings' in kwargs:
-        kwargs['context_settings'] = {}
 
     @click.group(name=name, help=help, cls=RichGroup, **kwargs)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
+
+        if not ctx.meta and initial_ctx_meta:
+            ctx.meta.update(initial_ctx_meta)
 
         # Set a flag in the context that we'll use to decide whether to show help
         ctx.meta['show_help_on_no_command'] = True
@@ -403,13 +407,15 @@ class OutputFormatter:
             # Close the slave descriptor in the parent
             os.close(slave_fd)
 
-
             # Register signal handler to forward `Ctrl-C`
             def forward_signal(signum, frame):
                 if process.poll() is None:  # If the process is still running
                     process.send_signal(signum)
 
             signal.signal(signal.SIGINT, forward_signal)
+
+            decoder = codecs.getincrementaldecoder("utf-8")()
+            buffer = bytearray()
 
             # Read from the master PTY in real-time
             try:
@@ -418,12 +424,16 @@ class OutputFormatter:
                     if not chunk:
                         break
                     stdout_bytes.extend(chunk)
+                    text = decoder.decode(chunk)
                     if not suppress:
-                        print(chunk.decode("utf-8", errors="replace"), end="")  # Decode and print
+                        print(text, end="")
+                        #print(chunk.decode("utf-8", errors="replace"), end="")  # Decode and print
             except OSError as e:
                 if e.errno != errno.EIO:  # EIO means EOF
                     raise
             finally:
+                if not suppress:
+                    print(decoder.decode(b"", final=True), end="")
                 os.close(master_fd)  # Ensure the fd is closed
 
             # Wait for the process to complete
@@ -516,3 +526,6 @@ def argument(*param_decls, **kwargs):
 
 command = partial(click.command, cls=RichCommand)
 output = OutputFormatter()
+
+# Short alias
+run = output.run_command_and_print_output
