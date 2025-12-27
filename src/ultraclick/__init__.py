@@ -276,6 +276,14 @@ class OutputFormatter:
         self.console = rich.console.Console(highlight=False, file=sys.stderr)
         self._original_console_file = self.console.file
         self._silenced = False
+        self.shell = self._find_shell()
+
+    def _find_shell(self):
+        """Find a suitable shell, preferring bash over sh for better proctitle support."""
+        for s in ['/bin/bash', '/usr/bin/bash', '/bin/sh']:
+            if os.path.exists(s):
+                return s
+        return '/bin/sh'
 
     def title(self, project_name):
         self.console.print(f"Docker Manager: [bold magenta]{project_name}[/bold magenta]")
@@ -406,6 +414,7 @@ class OutputFormatter:
             process = subprocess.Popen(
                 command,
                 shell=True,
+                executable=self.shell,
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
@@ -419,7 +428,9 @@ class OutputFormatter:
             # Register signal handler to forward `Ctrl-C`
             def forward_signal(signum, frame):
                 if process.poll() is None:  # If the process is still running
-                    process.send_signal(signum)
+                    # Send Ctrl-C to the PTY instead of the process
+                    # This ensures the signal reaches the foreground process group
+                    os.write(master_fd, b'\x03')
 
             signal.signal(signal.SIGINT, forward_signal)
 
