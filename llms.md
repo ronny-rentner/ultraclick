@@ -136,6 +136,10 @@ if __name__ == "__main__":
     - `click.output.warning(msg)`
     - `click.output.info(msg)`
     - `click.output.headline(msg)`
+    - **`click.output.run_command(cmd, headline=None, error_handling=True)`**:
+        - Runs a shell command with PTY support (Unix) or subprocess (Windows).
+        - Streams output in real-time while preserving colors/interactive elements.
+        - Correctly forwards signals (Ctrl-C) and supports `setproctitle` in subprocesses.
 
 ## Best Practices
 1.  **State Management**: Use `__init__` methods to initialize state for the group/subgroup.
