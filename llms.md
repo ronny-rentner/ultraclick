@@ -146,3 +146,29 @@ if __name__ == "__main__":
 2.  **Context Sharing**: Use `click.ctx.meta` to pass global flags (like verbose, dry-run, config paths) down to deep subcommands.
 3.  **Return Values**: Prefer returning strings or data structures from commands instead of manually calling `print()`. UltraClick handles the display.
 4.  **Type Hints**: Use standard Python type hints in function signatures; Click often infers types, and UltraClick leverages signature inspection.
+
+## Library Development
+
+If you are modifying the `ultraclick` library itself:
+
+### Setup
+1.  **Clone & Install**:
+    ```bash
+    git clone https://github.com/ronny-rentner/ultraclick.git
+    cd ultraclick
+    python -m venv venv
+    source venv/bin/activate
+    pip install -e .
+    ```
+
+### Testing
+Run the unit tests to verify changes:
+```bash
+python -m unittest discover tests
+```
+
+### Code Style (Internal)
+-   **Formatting**: Follow PEP 8.
+-   **Imports**: Group standard library first, then third-party, then local.
+-   **Docstrings**: Use triple quotes for classes and public functions.
+-   **Naming**: Snake case for functions/variables, CamelCase for classes.
