@@ -53,6 +53,20 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e .
 ```
 
+## Running Tests
+
+You can run the included unit tests using the standard Python `unittest` module:
+
+```bash
+python -m unittest tests/test_demo.py
+```
+
+Or run all tests in the `tests/` directory:
+
+```bash
+python -m unittest discover tests
+```
+
 ## Demo Application
 
 The repository includes a comprehensive demo that showcases ultraclick's features. After installation and activating your virtual environment, try the following commands:
