@@ -75,6 +75,19 @@ class RichCommand(click.RichCommand):
         return result
 
 class RichGroup(click.RichGroup):
+    def get_help_option(self, ctx):
+        help_options = self.get_help_option_names(ctx)
+        if not help_options or not self.add_help_option:
+            return None
+
+        if self._help_option is None:
+            # We use Click's standard HelpOption class but provide our own callback
+            # to prevent it from exiting immediately.
+            from click.decorators import HelpOption
+            self._help_option = HelpOption(help_options, callback=deferred_help_callback)
+
+        return self._help_option
+
     def get_command(self, ctx, cmd_name):
         rv = click.Group.get_command(self, ctx, cmd_name)
         if rv is not None:
@@ -119,6 +132,11 @@ class RichGroup(click.RichGroup):
                 exc.dying_and_help_printed = True
                 # Prevent the duplicate 'usage' help because we already print it
                 exc.ctx = None
+            
+            # If help was explicitly requested, suppress the error and exit cleanly
+            if ctx.meta.get('ultraclick_help_requested'):
+                ctx.exit(0)
+
             raise exc
 
 def wrap_command_with_context(command_fn, instance_key=None):
@@ -131,6 +149,11 @@ def wrap_command_with_context(command_fn, instance_key=None):
     @wraps(command_fn)
     @click.pass_context
     def wrapped_fn(ctx, *args, **kwargs):
+        # Check if help was requested for a single command (no group)
+        if ctx.meta.get('ultraclick_help_requested'):
+            click.echo(ctx.get_help())
+            ctx.exit()
+
         instance = ctx.meta.get(instance_key)
         if not instance:
             raise ValueError(f"Instance for key '{instance_key}' not found in context.")
@@ -160,6 +183,10 @@ def alias(cmd):
     def _alias(self, *args, **kwargs):
         return click.get_current_context().forward(cmd)
     return _alias
+
+def deferred_help_callback(ctx, param, value):
+    if value and not ctx.resilient_parsing:
+        ctx.meta['ultraclick_help_requested'] = True
 
 def main_group(*args, **kwargs):
     """
@@ -217,8 +244,15 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         instance = cls(*args, **kwargs)
         ctx.meta[instance_key] = instance
 
-        # If no subcommand was invoked, check if we should show help
-        if ctx.invoked_subcommand is None and ctx.meta.get('show_help_on_no_command', True):
+        # If help was requested anywhere in the chain, and we are the final command
+        # (no subcommand invoked), show our help.
+        #if ctx.meta.get('ultraclick_help_requested') and ctx.invoked_subcommand is None:
+        #    click.echo(ctx.get_help())
+        #    ctx.exit()
+
+        # If no subcommand was invoked, check if we should show help (standard behavior)
+        if ctx.invoked_subcommand is None and \
+            (ctx.meta.get('show_help_on_no_command', True) or ctx.meta.get('ultraclick_help_requested')):
             click.echo(ctx.get_help())
 
     # Add commands dynamically

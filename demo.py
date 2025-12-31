@@ -148,8 +148,9 @@ class MainApp:
         if verbose:
             click.output.success(f"Verbose mode enabled in {env} environment")
 
+    @click.option("--test", is_flag=True, help="Test option")
     @click.command()
-    def status(self):
+    def status(self, test):
         """Show application status."""
         return (
             f"Status: Running\n"

@@ -118,5 +118,47 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("Verbose: True", result_after.stdout)
         self.assertIn("Verbose mode enabled", result_after.stderr)
 
+    def test_subcommand_help_end(self):
+        """Test help at the end of a subcommand"""
+        result = self.run_command(["resource", "--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py resource", result.stdout)
+        self.assertIn("Commands", result.stdout)
+
+    def test_subcommand_help_start(self):
+        """Test help before a subcommand (look-ahead)"""
+        result = self.run_command(["--help", "resource"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py resource", result.stdout)
+
+    def test_deep_subcommand_help_end(self):
+        """Test help for a deep subcommand with required arguments"""
+        result = self.run_command(["resource", "create", "--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py resource create", result.stdout)
+        # Should NOT fail with missing argument error
+        self.assertNotIn("Missing argument", result.stdout)
+
+    def test_deep_subcommand_help_start(self):
+        """Test help before a deep subcommand"""
+        result = self.run_command(["--help", "resource", "create"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py resource create", result.stdout)
+        self.assertNotIn("Missing argument", result.stdout)
+
+    def test_leaf_command_help(self):
+        """Test help for a leaf command"""
+        result = self.run_command(["status", "--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py status", result.stdout)
+        self.assertNotIn("Status: Running", result.stdout)
+
+    def test_leaf_command_help_start(self):
+        """Test help before a leaf command"""
+        result = self.run_command(["--help", "status"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py status", result.stdout)
+        self.assertNotIn("Status: Running", result.stdout)
+
 if __name__ == '__main__':
     unittest.main()
