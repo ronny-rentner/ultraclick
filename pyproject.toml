@@ -118,7 +118,11 @@ classifiers = [
 #
 # For an analysis of this field vs pip's requirements files see:
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
-dependencies = ["click", "rich", "rich_click"]
+dependencies = [
+  "click >= 8.1.8",
+  "rich >= 14.0.0",
+  "rich_click >= 1.8.0"
+]
 
 # List additional groups of dependencies here (e.g. development
 # dependencies). Users will be able to install these using the "extras"
