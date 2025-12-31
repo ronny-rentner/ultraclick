@@ -2,6 +2,7 @@ import errno
 import inspect
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -12,7 +13,6 @@ import rich
 import rich.console
 import rich_click as click
 from click import *
-from click import shell_completion
 
 import codecs
 
@@ -37,9 +37,11 @@ class ClickContextProxy:
         ctx = click.get_current_context()
         return ctx[key]
 
-    def __call__(self, *args, **kwargs):
-        ctx = click.get_current_context()
-        return ctx(*args, **kwargs)
+    # TODO: This method crashes because click.Context is not callable.
+    #       Keeping it commented out for now to verify no downstream usage relies on it.
+    # def __call__(self, *args, **kwargs):
+    #     ctx = click.get_current_context()
+    #     return ctx(*args, **kwargs)
 
     def __repr__(self):
         ctx = click.get_current_context()
@@ -110,14 +112,6 @@ class RichGroup(click.RichGroup):
         if not cmd:
             return _, cmd, args
         return cmd.name, cmd, args
-
-    def main(self, *args, **kwargs):
-        try:
-            return super().main(*args, **kwargs)
-        # No exceptions are being thrown :(
-        except Exception as exc:
-            print(exc)
-            raise
 
     def invoke(self, ctx):
         try:
@@ -299,13 +293,14 @@ class OutputFormatter:
     def __init__(self):
         # Rich console should pick up those env variables
         if 'LINES' in os.environ:
-            self.lines = os.environ["LINES"]
+            self.lines = int(os.environ["LINES"])
         else:
-            self.lines = subprocess.run(['tput', 'lines'], capture_output = True, text = True).stdout.strip()
+            self.lines = shutil.get_terminal_size().lines
+
         if 'COLUMNS' in os.environ:
-            self.columns = os.environ["COLUMNS"]
+            self.columns = int(os.environ["COLUMNS"])
         else:
-            self.columns = subprocess.run(['tput', 'cols'], capture_output = True, text = True).stdout.strip()
+            self.columns = shutil.get_terminal_size().columns
 
         self.console = rich.console.Console(highlight=False, file=sys.stderr)
         self._original_console_file = self.console.file
