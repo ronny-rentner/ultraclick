@@ -83,10 +83,16 @@ class RichGroup(click.RichGroup):
             return None
 
         if self._help_option is None:
-            # We use Click's standard HelpOption class but provide our own callback
-            # to prevent it from exiting immediately.
-            from click.decorators import HelpOption
-            self._help_option = HelpOption(help_options, callback=deferred_help_callback)
+            # Use help_option decorator to create the option with our custom callback
+            from click.decorators import help_option
+            
+            # Apply decorator to self (Command) which adds the param to self.params
+            help_option(*help_options, callback=deferred_help_callback)(self)
+            
+            # Retrieve the last added parameter (which is our help option) and remove it
+            # because get_help_option is supposed to return it, not register it permanently
+            # (although click core does caching, we just need the object here)
+            self._help_option = self.params.pop()
 
         return self._help_option
 
