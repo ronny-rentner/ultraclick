@@ -25,7 +25,6 @@ Say goodbye to massive files filled with decorated functions. **ultraclick** let
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Demo Application](#demo-application)
 - [Help Output](#help-output)
 - [Advanced Usage](#advanced-usage)
 - [Tips](#tips)
@@ -56,54 +55,162 @@ pip install -e .
 
 ## Quick Start
 
-Here is a complete, runnable example demonstrating how to build a structured CLI with global options and nested commands. This code corresponds to a simplified version of the included `demo.py`.
+Here is a complete, runnable example demonstrating how to build a structured CLI with global options, nested commands, and aliases. This code corresponds to the included `demo.py`.
 
 ```python
-import ultraclick as click
+#!/usr/bin/env python
+"""
+ultraclick Demo Application
+
+This demo systematically showcases ultraclick's main features:
+1. Class-based CLI structure
+2. Nested command groups
+3. Automatic context sharing
+4. Command aliases
+5. Command abbreviations
+6. Automatic return value handling
+"""
+
 import pathlib
 
-# Nested Group: Configuration
+import ultraclick as click
+
+
 class ConfigCommand:
-    """Configuration management."""
-    
-    @click.option("--config-dir", type=pathlib.Path, default="./config")
+    """
+    Configuration commands for the application.
+    Demonstrates context sharing between subcommands.
+
+    This command group shows help when called directly (default behavior).
+    """
+    @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
     def __init__(self, config_dir):
-        # State specific to this group
+        # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
-        # Access shared global state
+
+        # Access shared data from global context
         self.profile = click.ctx.meta["profile"]
 
     @click.command()
     def show(self):
-        """Show current configuration."""
-        return f"Profile: {self.profile}, Dir: {self.config_dir}"
-
-# Main Application
-@click.main_group(name="demo")
-class MainApp:
-    """Main demo application."""
-    
-    # Register nested groups as class attributes
-    config = ConfigCommand
-
-    @click.option("--verbose", is_flag=True, help="Enable verbose output")
-    @click.option("--profile", default="default", help="Configuration profile")
-    def __init__(self, verbose, profile):
-        # Initialize global state
-        self.verbose = verbose
-        self.profile = profile
-        
-        # Share state with subcommands via context metadata
-        click.ctx.meta["verbose"] = verbose
-        click.ctx.meta["profile"] = profile
-        
-        if verbose:
-            click.output.info(f"Verbose mode enabled (Profile: {profile})")
+        """Display current configuration settings."""
+        path_prefix = './' if not self.config_dir.is_absolute() else ''
+        return (
+            f"Active Profile: {self.profile}\n"
+            f"Config Directory: {path_prefix}{self.config_dir}"
+        )
 
     @click.command()
-    def status(self):
+    @click.argument("name")
+    @click.argument("value")
+    def set(self, name, value):
+        """Set a configuration value."""
+        return f"Setting {name}={value} in profile '{self.profile}'"
+
+    # Command alias demonstration
+    update = click.alias(set)
+
+    @click.command()
+    @click.argument("name")
+    def get(self, name):
+        """Get a configuration value."""
+        return f"Getting '{name}' from profile '{self.profile}'"
+
+    # Another command alias
+    fetch = click.alias(get)
+
+
+class ResourceCommand:
+    """
+    Resource management commands.
+    Demonstrates parameter handling and nested command structure.
+
+    This command group performs an action when called directly (no help shown).
+    """
+    @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
+                  default="server", help="Type of resource to manage")
+    def __init__(self, resource_type):
+        self.resource_type = resource_type
+
+        # Access shared data from parent command
+        self.profile = click.ctx.meta["profile"]
+
+    @click.command()
+    @click.argument("name")
+    @click.option("--size", default="medium", help="Resource size (small, medium, large)")
+    @click.option("--region", default="us-east", help="Deployment region")
+    def create(self, name, size, region):
+        """Create a new resource."""
+        # Use the profile from instance state instead of context
+        return (
+            f"Creating {self.resource_type} '{name}'\n"
+            f"Size: {size}\n"
+            f"Region: {region}\n"
+            f"Using profile: {self.profile}"
+        )
+
+    @click.command()
+    @click.argument("name")
+    def delete(self, name):
+        """Delete a resource."""
+        return f"Deleting {self.resource_type} '{name}'"
+
+    @click.command()
+    @click.argument("names", nargs=-1)
+    def list(self, names):
+        """List resources, optionally filtered by name."""
+        # Use instance state for profile
+        if not names:
+            return f"Listing all {self.resource_type}s (Profile: {self.profile})"
+        else:
+            return f"Filtered {self.resource_type} list: {', '.join(names)} (Profile: {self.profile})"
+
+
+@click.main_group(name="demo")
+class MainApp:
+    """
+    Main demo application showcasing ultraclick's features.
+    """
+    # Define nested command groups
+    config = ConfigCommand
+    resource = ResourceCommand
+
+    @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
+    @click.option("--profile", default="default", help="Configuration profile to use")
+    @click.option("--env", default="development",
+                 type=click.Choice(['development', 'staging', 'production']),
+                 help="Environment to run in")
+    @click.version_option(version="1.0")
+    def __init__(self, verbose, profile, env):
+        # Store options as instance variables
+        self.verbose = verbose
+        self.profile = profile
+        self.env = env
+
+        # Store settings in global state
+        click.ctx.meta["verbose"] = verbose
+        click.ctx.meta["profile"] = profile
+        click.ctx.meta["env"] = env
+
+        if verbose:
+            click.output.success(f"Verbose mode enabled in {env} environment")
+
+    @click.option("--test", is_flag=True, help="Test option")
+    @click.command()
+    def status(self, test):
         """Show application status."""
-        return f"Status: Running (Profile: {self.profile})"
+
+        click.output.headline(f'Demo Status')
+
+        return (
+            f"Status: Running\n"
+            f"Environment: {self.env}\n"
+            f"Verbose: {self.verbose}\n"
+            f"Profile: {self.profile}"
+        )
+
+    # 'info' is an alias for the 'status' command
+    info=click.alias(status)
 
 if __name__ == "__main__":
     MainApp()
@@ -113,25 +220,23 @@ if __name__ == "__main__":
 
 ```console
 $ python demo.py --verbose status
-ℹ Verbose mode enabled (Profile: default)
-Status: Running (Profile: default)
+Verbose mode enabled in development environment
+
+→ Demo Status
+Status: Running
+Environment: development
+Verbose: True
+Profile: default
 
 $ python demo.py config show
-Profile: default, Dir: config
+Active Profile: default
+Config Directory: ./config
 
-$ python demo.py --profile production config --config-dir /etc/app show
-Profile: production, Dir: /etc/app
-```
-
-## Demo Application
-
-The repository includes a comprehensive `demo.py` that expands on the quick start with more complex features. Try the following commands to explore:
-
-```bash
-./demo.py --help
-./demo.py resource --help
-./demo.py --profile staging resource --resource-type storage list
-./demo.py r l  # Command abbreviation!
+$ python demo.py --profile production resource create mydb --size large
+Creating server 'mydb'
+Size: large
+Region: us-east
+Using profile: production
 ```
 
 ## Help Output
@@ -142,15 +247,20 @@ The repository includes a comprehensive `demo.py` that expands on the quick star
 ```
  Usage: demo [OPTIONS] COMMAND [ARGS]...                                     
                                                                                 
- Main demo application.                                                       
+ Main demo application showcasing ultraclick's features.                        
                                                                                 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --verbose                                    Enable verbose output           │
-│ --profile  TEXT                              Configuration profile           │
+│ --profile  TEXT                              Configuration profile to use    │
+│ --env      [development|staging|production]  Environment to run in           │
+│ --version                                    Show the version and exit.      │
 │ --help                                       Show this message and exit.     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ config      Configuration management.                                        │
+│ config      Configuration commands for the application. Demonstrates context │
+│             sharing between subcommands.                                     │
+│ resource    Resource management commands. Demonstrates parameter handling and │
+│             nested command structure.                                        │
 │ status      Show application status.                                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
