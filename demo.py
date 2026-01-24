@@ -152,6 +152,9 @@ class MainApp:
     @click.command()
     def status(self, test):
         """Show application status."""
+
+        click.output.headline(f'Demo Status')
+
         return (
             f"Status: Running\n"
             f"Environment: {self.env}\n"

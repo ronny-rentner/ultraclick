@@ -77,6 +77,63 @@ class RichCommand(click.RichCommand):
         return result
 
 class RichGroup(click.RichGroup):
+    source_class = None
+    instance_key = None
+    group_kwargs = None
+
+    def parse_args(self, ctx, args):
+        #output.info(f"BEF RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} args={args}")
+        rv = super().parse_args(ctx, args)
+        #output.info(f"AFT RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} ctx.meta={ctx.meta}")
+        
+        if self.source_class and self.instance_key and self.instance_key not in ctx.meta:
+            # Instantiate the class with parsed options
+            instance = self.source_class(**ctx.params)
+            ctx.meta[self.instance_key] = instance
+            self._discover()
+            
+        return rv
+
+    def _discover(self):
+        #output.info(f"RichGroup._discover(group={self.name}, source_class={self.source_class} context_settings={self.context_settings})")
+        if not self.source_class:
+            return
+
+        # Add commands dynamically
+        for attr_name in dir(self.source_class):
+            attr = getattr(self.source_class, attr_name)
+            if isinstance(attr, click.Command):
+                # Avoid redundant adding
+                cmd_name = getattr(attr, 'name', attr_name)
+                if cmd_name in self.commands:
+                    continue
+
+                # Wrap the command function with context
+                command_fn = attr.callback
+                #TODO: Is it an error if it's not callable?
+                if callable(command_fn):
+                    wrapped_callback = wrap_command_with_context(command_fn, instance_key=self.instance_key)
+                    attr.callback = wrapped_callback
+
+                #if attr_name != command_fn.__name__:
+                if attr.alias:
+                    #print('alias: ', attr, attr_name, getattr(attr, 'name', attr_name), command_fn.__name__)
+                    #alias_cmd = alias_command(attr_name, attr)
+                    self.add_command(attr, name=attr_name)
+                    continue
+                else:
+                    #print('add_command: ', attr, '1', attr_name, '2', getattr(attr, 'name', ''), '3', command_fn.__name__)
+                    # name parameter has priority, otherwise take the command function name
+                    self.add_command(attr, name=getattr(attr, 'name', attr_name))
+
+            # Handle nested groups
+            if isinstance(attr, type) and issubclass(attr, object) and not attr_name.startswith("_"):
+                # Nested group class
+                cmd_name = attr_name.lower()
+                if cmd_name not in self.commands:
+                    nested_group = group_from_class(attr, name=cmd_name, parent_key=self.instance_key, **(self.group_kwargs or {}))
+                    self.add_command(nested_group)
+
     def get_help_option(self, ctx):
         help_options = self.get_help_option_names(ctx)
         if not help_options or not self.add_help_option:
@@ -97,6 +154,7 @@ class RichGroup(click.RichGroup):
         return self._help_option
 
     def get_command(self, ctx, cmd_name):
+        #output.info(f"get_command {cmd_name} ctx.params={ctx.params}")
         rv = click.Group.get_command(self, ctx, cmd_name)
         if rv is not None:
             return rv
@@ -111,7 +169,7 @@ class RichGroup(click.RichGroup):
         return super().get_command(ctx, cmd_name)
 
     def resolve_command(self, ctx, args):
-        #output.info(f"resolve_command1 - args: {args}")
+        #output.info(f"resolve_command1 - args: {args} ctx.params={ctx.params}")
         # always return the full command name
         _, cmd, args = super().resolve_command(ctx, args)
         #output.info(f"resolve_command2 -  {_} {cmd} {args}")
@@ -228,60 +286,38 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     context_settings.setdefault('ignore_unknown_options',  True)
     context_settings.setdefault('allow_extra_args',        True)
 
-
-    @click.group(name=name, help=help, cls=RichGroup,  **kwargs)
+    @click.group(name=name, help=help, cls=RichGroup, **kwargs)
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
+        if instance_key in ctx.meta:
+            instance = ctx.meta[instance_key]
+        else:
+            if not ctx.meta and initial_ctx_meta:
+                ctx.meta.update(initial_ctx_meta)
 
-        if not ctx.meta and initial_ctx_meta:
-            ctx.meta.update(initial_ctx_meta)
+            # Set a flag in the context that we'll use to decide whether to show help
+            ctx.meta['show_help_on_no_command'] = True
 
-        # Set a flag in the context that we'll use to decide whether to show help
-        ctx.meta['show_help_on_no_command'] = True
+            # Instantiate the class and store it in the context using the instance key
+            instance = cls(*args, **kwargs)
+            ctx.meta[instance_key] = instance
 
-        # Instantiate the class and store it in the context using the instance key
-        instance = cls(*args, **kwargs)
-        ctx.meta[instance_key] = instance
+        # Handle execution if no subcommand was invoked
+        if ctx.invoked_subcommand is None:
+            if hasattr(instance, "__run__") and not ctx.meta.get('ultraclick_help_requested'):
+                return instance.__run__()
 
-        # If help was requested anywhere in the chain, and we are the final command
-        # (no subcommand invoked), show our help.
-        #if ctx.meta.get('ultraclick_help_requested') and ctx.invoked_subcommand is None:
-        #    click.echo(ctx.get_help())
-        #    ctx.exit()
+            if ctx.meta.get('show_help_on_no_command', True) or ctx.meta.get('ultraclick_help_requested'):
+                click.echo(ctx.get_help())
 
-        # If no subcommand was invoked, check if we should show help (standard behavior)
-        if ctx.invoked_subcommand is None and \
-            (ctx.meta.get('show_help_on_no_command', True) or ctx.meta.get('ultraclick_help_requested')):
-            click.echo(ctx.get_help())
+    # Attach metadata for early initialization and discovery
+    group_cmd.source_class = cls
+    group_cmd.instance_key = instance_key
+    group_cmd.group_kwargs = kwargs
 
-    # Add commands dynamically
-    for attr_name in dir(cls):
-        attr = getattr(cls, attr_name)
-        if isinstance(attr, click.Command):
-            # Wrap the command function with context
-            command_fn = attr.callback
-            #TODO: Is it an error if it's not callable?
-            if callable(command_fn):
-                wrapped_callback = wrap_command_with_context(command_fn, instance_key=instance_key)
-                attr.callback = wrapped_callback
-
-            #if attr_name != command_fn.__name__:
-            if attr.alias:
-                #print('alias: ', attr, attr_name, getattr(attr, 'name', attr_name), command_fn.__name__)
-                #alias_cmd = alias_command(attr_name, attr)
-                group_cmd.add_command(attr, name=attr_name)
-                continue
-
-            #print('add_command: ', attr, '1', attr_name, '2', getattr(attr, 'name', ''), '3', command_fn.__name__)
-            # name parameter has priority, otherwise take the command function name
-            group_cmd.add_command(attr, name=getattr(attr, 'name', attr_name))
-
-        # Handle nested groups
-        if isinstance(attr, type) and issubclass(attr, object) and not attr_name.startswith("_"):
-            # Nested group class
-            nested_group = group_from_class(attr, name=attr_name.lower(), parent_key=instance_key, **kwargs)
-            group_cmd.add_command(nested_group)
+    # Perform initial discovery
+    group_cmd._discover()
 
     return group_cmd
 
@@ -408,8 +444,8 @@ class OutputFormatter:
 
         # Prepare the environment with color support
         env = os.environ.copy()
-        env['LINES'] = self.lines
-        env['COLUMNS'] = self.columns
+        env['LINES'] = str(self.lines)
+        env['COLUMNS'] = str(self.columns)
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
 
