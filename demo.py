@@ -153,6 +153,13 @@ class MainApp:
     def status(self, test):
         """Show application status."""
 
+        click.output.run_command([
+            "date",
+            "--utc",
+            "--date", "next friday 18:30",
+            f"+Generated for profile={self.profile} env={self.env} at %Y-%m-%d %H:%M:%S UTC",
+        ], 'Date')
+
         click.output.headline(f'Demo Status')
 
         return (

@@ -2,6 +2,7 @@ import errno
 import inspect
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -431,6 +432,13 @@ class OutputFormatter:
         Simulate a TTY to preserve colored output and interactive behaviors on Unix systems.
         Use a simpler approach on Windows.
         """
+        # Accept argv-style input so callers can describe command boundaries directly and let
+        # UltraClick assemble the shell string in one place before handing it to the PTY runner.
+        if isinstance(command, (list, tuple)):
+            command = shlex.join([str(part) for part in command])
+
+        # Keep string input working exactly as before so existing callers can continue passing
+        # prebuilt shell commands without any behavior change.
         command = command.strip()
 
         if headline:

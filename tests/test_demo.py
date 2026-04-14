@@ -44,6 +44,7 @@ class TestDemoCLI(unittest.TestCase):
         """Test the status command returns expected output"""
         result = self.run_command(["status"])
         self.assertEqual(result.returncode, 0)
+        self.assertIn("Generated for profile=default env=development at", result.stdout)
         self.assertIn("Status: Running", result.stdout)
         self.assertIn("Environment: development", result.stdout)
         self.assertIn("Profile: default", result.stdout)
@@ -102,6 +103,7 @@ class TestDemoCLI(unittest.TestCase):
         """Test that global options affect all commands"""
         result = self.run_command(["--profile", "production", "status"])
         self.assertEqual(result.returncode, 0)
+        self.assertIn("Generated for profile=production env=development at", result.stdout)
         self.assertIn("Profile: production", result.stdout)
     
     def test_allow_interspersed_args(self):
