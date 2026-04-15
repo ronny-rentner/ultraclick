@@ -31,6 +31,28 @@ class MyApp:
         click.ctx.meta["verbose"] = verbose
 ```
 
+In ultraclick, the optional methods `__init__` and `__run__` serve different roles:
+- `__init__` receives options and does setup steps.
+- `__run__` is called only when no subcommand is provided.
+- If `__run__` is absent, the group shows help instead.
+
+Use `__run__` mainly for very short scripts that have no subcommands.
+
+```python
+import ultraclick as click
+
+
+class SimpleApp:
+    def __run__(self):
+        click.output.success("Success")
+
+
+if __name__ == "__main__":
+    click.group_from_class(SimpleApp)()
+```
+
+With that shape, calling the script runs `__run__`.
+
 ### 3. Add Commands
 Define methods within the class and decorate them with `@click.command()`.
 
@@ -59,6 +81,10 @@ Use nested classes to create subgroups.
 ### Custom Behavior When No Subcommand Is Provided
 By default, UltraClick shows the help message if a group is called without a subcommand. You can override this to show a status summary or perform a default action.
 
+`if click.ctx.invoked_subcommand is None` checks whether the group was called directly without selecting any subcommand.
+`click.ctx.meta['show_help_on_no_command'] = False` disables the default help screen for that no-subcommand case so your
+custom action can run instead.
+
 ```python
     class Resource:
         def __init__(self):
@@ -70,6 +96,9 @@ By default, UltraClick shows the help message if a group is called without a sub
                 # Perform custom action (e.g., print a summary)
                 click.echo("Resource Dashboard: 3 active nodes")
 ```
+
+This pattern is useful when the group still has subcommands, but calling the group by itself should show a summary or
+perform some other custom action instead of rendering help.
 
 ## Detailed Example
 
@@ -129,6 +158,11 @@ if __name__ == "__main__":
 - **`click.ctx`**: A proxy object that forwards attribute access to `click.get_current_context()`.
     - Usage: `click.ctx.meta["key"]`, `click.ctx.params`, `click.ctx.invoked_subcommand`.
 
+### Help Generation
+- Use class docstrings as group help text when available.
+- If no real help text exists, leave the description blank instead of inventing placeholder text.
+- Keep usage lines exact: only advertise `COMMAND [ARGS]...` when subcommands actually exist.
+
 ### Output
 - **`click.output`**: An instance of `OutputFormatter` providing styled output methods:
     - `click.output.success(msg)`
@@ -140,6 +174,11 @@ if __name__ == "__main__":
         - Runs a shell command with PTY support (Unix) or subprocess (Windows).
         - Streams output in real-time while preserving colors/interactive elements.
         - Correctly forwards signals (Ctrl-C) and supports `setproctitle` in subprocesses.
+
+Use `click.output.*(...)` instead of `print()` when you want terminal output. Structure output with methods such as
+`headline`, `info`, `success`, `warning`, and `error` so the command line stays consistent. Use `click.run_command()`
+or `click.output.run_command()` for external commands so command echoing and subprocess output are handled by
+UltraClick instead of being printed manually.
 
 ## Best Practices
 1.  **State Management**: Use `__init__` methods to initialize state for the group/subgroup.

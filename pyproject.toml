@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ultraclick"
-version = "0.2.0"
+version = "0.2.1"
 description = "Thin wrapper around the Python 'click' library to allow building class based CLIs"
 authors = [{ name = "Ronny Rentner", email = "ultraclick.code@ronny-rentner.de" }]
 readme = "readme.md"

@@ -82,6 +82,12 @@ class RichGroup(click.RichGroup):
     instance_key = None
     group_kwargs = None
 
+    def collect_usage_pieces(self, ctx):
+        pieces = click.Command.collect_usage_pieces(self, ctx)
+        if self.list_commands(ctx):
+            pieces.append(self.subcommand_metavar)
+        return pieces
+
     def parse_args(self, ctx, args):
         #output.info(f"BEF RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} args={args}")
         rv = super().parse_args(ctx, args)
@@ -271,7 +277,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     if name is None:
         name = cls.__name__.lower()
     if help is None:
-        help = cls.__doc__ or f"Commands for {cls.__name__}"
+        help = inspect.getdoc(cls) or ""
 
     # Construct the instance key
     instance_key = f"{parent_key}.{name}" if parent_key else name

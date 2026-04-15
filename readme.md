@@ -265,7 +265,27 @@ Using profile: production
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Advanced Usage
+## Usage
+
+Some ultraclick usage patterns.
+
+### Group Initialization And Default Actions
+
+In ultraclick, the optional methods `__init__` and `__run__` serve different roles:
+ * `__init__` receives options and does setup steps. 
+ * `__run__` is called only when no subcommand is provided.
+ * If `__run__` is absent, the group shows help instead.
+
+```python
+@click.main_group(name="simple")
+class SimpleApp:
+    @click.option("--profile")
+    def __init__(self, profile):
+        self.profile = profile
+
+    def __run__(self):
+        return f"Running with profile {self.profile}"
+```
 
 ### Context Proxy (`click.ctx`)
 **ultraclick** provides a `click.ctx` proxy that forwards attributes to `click.get_current_context()`. This allows you to access context data globally without passing it as a parameter.
