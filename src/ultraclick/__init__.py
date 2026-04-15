@@ -90,7 +90,15 @@ class RichGroup(click.RichGroup):
 
     def parse_args(self, ctx, args):
         #output.info(f"BEF RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} args={args}")
-        rv = super().parse_args(ctx, args)
+        try:
+            rv = super().parse_args(ctx, args)
+        except click.UsageError:
+            # Deferred help marks the context first so nested `--help target` forms keep working.
+            # Required __init__ arguments must not win over that explicit help request.
+            if ctx.meta.get('ultraclick_help_requested'):
+                click.echo(self.get_help(ctx))
+                ctx.exit(0)
+            raise
         #output.info(f"AFT RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} ctx.meta={ctx.meta}")
         
         if self.source_class and self.instance_key and self.instance_key not in ctx.meta:
