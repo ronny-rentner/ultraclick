@@ -10,10 +10,13 @@ DEMO_SCRIPT = os.path.join(PROJECT_ROOT, 'demo.py')
 class TestDemoCLI(unittest.TestCase):
     """Test the demo CLI by actually running it as a subprocess"""
     
-    def run_command(self, args):
+    def run_command(self, args, env=None):
         """Run the demo CLI with the given arguments and return stdout and stderr"""
         # Use Python to run the script to ensure it works cross-platform
         cmd = [sys.executable, DEMO_SCRIPT] + args
+        command_env = os.environ.copy()
+        if env:
+            command_env.update(env)
         
         # Run the command and capture stdout and stderr
         result = subprocess.run(
@@ -21,7 +24,8 @@ class TestDemoCLI(unittest.TestCase):
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE,
             text=True,
-            cwd=PROJECT_ROOT
+            cwd=PROJECT_ROOT,
+            env=command_env,
         )
         
         # Print full output details for better debugging
@@ -159,6 +163,36 @@ class TestDemoCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: demo.py status", result.stdout)
         self.assertNotIn("Status: Running", result.stdout)
+
+    def test_non_tty_defaults_to_plain_help(self):
+        """Captured subprocess help should default to plain Click output outside a TTY."""
+        result = self.run_command(["--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        self.assertIn("Options:", result.stdout)
+        self.assertNotIn("╭", result.stdout)
+
+    def test_term_dumb_forces_plain_help(self):
+        """TERM=dumb should keep help output in the plain text path."""
+        result = self.run_command(["--help"], env={"TERM": "dumb"})
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        self.assertNotIn("╭", result.stdout)
+
+    def test_force_colors_restores_rich_help(self):
+        """ULTRACLICK_COLORS must override non-TTY plain-mode fallback for help output."""
+        result = self.run_command(["--help"], env={"ULTRACLICK_COLORS": "1"})
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        self.assertIn("╭─ Options", result.stdout)
+
+    def test_force_colors_restores_rich_formatter_output(self):
+        """ULTRACLICK_COLORS must also restore the rich formatter headline path."""
+        result = self.run_command(["status"], env={"ULTRACLICK_COLORS": "1"})
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Status: Running", result.stdout)
+        self.assertIn("→ Demo Status", result.stderr)
+        self.assertNotIn("# Demo Status", result.stderr)
 
 if __name__ == '__main__':
     unittest.main()

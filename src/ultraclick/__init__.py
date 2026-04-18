@@ -10,9 +10,30 @@ import sys
 from functools import partial, wraps
 from types import SimpleNamespace
 
-import rich
-import rich.console
-import rich_click as click
+# Explicit UltraClick overrides win over terminal heuristics.
+FORCE_COLORS = os.environ.get('ULTRACLICK_COLORS', '').lower() in {'1', 'true', 'yes', 'on'}
+FORCE_PLAIN_TEXT = os.environ.get('ULTRACLICK_PLAIN', '').lower() in {'1', 'true', 'yes', 'on'}
+
+# Plain mode follows the same broad style many CLIs use unless colors are explicitly forced.
+PLAIN_TEXT_MODE = not FORCE_COLORS and (
+    FORCE_PLAIN_TEXT
+    or 'NO_COLOR' in os.environ
+    or os.environ.get('TERM') == 'dumb'
+    or not sys.stdout.isatty()
+    or not sys.stderr.isatty()
+)
+
+if PLAIN_TEXT_MODE:
+    import click
+    # Plain mode keeps the rest of the module uniform by mapping Rich class names
+    # back to stock Click classes when rich_click is not in use.
+    click.RichCommand = click.Command
+    click.RichGroup = click.Group
+else:
+    import rich
+    import rich.console
+    import rich.panel
+    import rich_click as click
 from click import *
 
 import codecs
@@ -21,6 +42,20 @@ import codecs
 if os.name != 'nt':  # Not Windows
     import pty
     import termios
+
+
+class PlainTextConsole:
+    """
+    Minimal console adapter for plain formatter output.
+    It accepts the `Console.print()` parameters used in this file and writes plain text.
+    """
+
+    def __init__(self, file):
+        self.file = file
+
+    def print(self, *objects, sep=' ', end='\n', **kwargs):
+        # Formatter methods keep calling `self.console.print(...)` unchanged.
+        print(*objects, sep=sep, end=end, file=self.file)
 
 
 class ClickContextProxy:
@@ -468,12 +503,21 @@ class OutputFormatter:
         env = os.environ.copy()
         env['LINES'] = str(self.lines)
         env['COLUMNS'] = str(self.columns)
+        if PLAIN_TEXT_MODE:
+            # Plain mode should propagate the same terminal expectations to child processes.
+            env['TERM'] = 'dumb'
+            env['NO_COLOR'] = '1'
+            env['CLICOLOR'] = '0'
+            env.pop('CLICOLOR_FORCE', None)
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
 
-        # Use a simpler approach on Windows
-        if os.name == 'nt':
+        # Plain mode avoids PTYs so subprocesses behave like non-interactive plain-text tools.
+        if PLAIN_TEXT_MODE or os.name == 'nt':
             result = subprocess.run(command, shell=True, text=True, capture_output=True, env=env)
+            if not suppress:
+                print(result.stdout, end="")
+                print(result.stderr, end="", file=sys.stderr)
             # Handle return code
             if result.returncode != 0:
                 if not suppress and error_handling:
@@ -588,6 +632,57 @@ class OutputFormatter:
         return self.run_command(command, headline, suppress=True, error_handling=error_handling, parse_json=True)
 
 
+class PlainOutputFormatter(OutputFormatter):
+    """
+    Plain text formatter for LLM and machine-oriented script output.
+    It keeps the same public API as OutputFormatter while rendering only simple text.
+    """
+
+    def __init__(self):
+        if 'LINES' in os.environ:
+            self.lines = int(os.environ["LINES"])
+        else:
+            self.lines = shutil.get_terminal_size().lines
+
+        if 'COLUMNS' in os.environ:
+            self.columns = int(os.environ["COLUMNS"])
+        else:
+            self.columns = shutil.get_terminal_size().columns
+
+        # Plain mode must not touch Rich imports, so it initializes its own console directly.
+        self.console = PlainTextConsole(sys.stderr)
+        self._original_console_file = self.console.file
+        self._silenced = False
+        self.shell = self._find_shell()
+
+    def title(self, project_name):
+        self.console.print(f"Docker Manager: {project_name}")
+
+    def main_operation(self, operation_name):
+        self.console.print(f"== {operation_name} ==")
+
+    def environment(self, env_name, script_path, venv_path):
+        self.headline('Setup')
+        self.console.print(f"Environment: {env_name}")
+        self.console.print(f"Python venv: {venv_path}")
+
+    def headline(self, message, icon=">"):
+        self.console.print("")
+        self.console.print(f"# {message}")
+
+    def error(self, message):
+        self.console.print(f"ERROR: {message}")
+
+    def warning(self, message):
+        self.console.print(f"WARNING: {message}")
+
+    def success(self, message):
+        self.console.print(f"OK: {message}")
+
+    def failure(self, message):
+        self.console.print(f"ERROR: {message}")
+
+
 
 @wraps(click.option)
 def option(*param_decls, **kwargs):
@@ -638,7 +733,7 @@ def argument(*param_decls, **kwargs):
     return decorator
 
 command = partial(click.command, cls=RichCommand)
-output = OutputFormatter()
+output = PlainOutputFormatter() if PLAIN_TEXT_MODE else OutputFormatter()
 
 # Short alias
 run = output.run_command_and_print_output

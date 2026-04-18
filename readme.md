@@ -243,6 +243,10 @@ Using profile: production
 
 **ultraclick** leverages RichClick to produce beautiful help screens automatically.
 
+Plain text output is selected automatically when stdout or stderr is not a TTY, when `TERM=dumb`, or when `NO_COLOR`
+is present. Set `ULTRACLICK_PLAIN=1` to force plain Click-style output even in an interactive terminal. Set
+`ULTRACLICK_COLORS=1` to force Rich output and override plain-mode detection, including `ULTRACLICK_PLAIN`.
+
 ### Main Help
 ```
  Usage: demo [OPTIONS] COMMAND [ARGS]...                                     
@@ -323,6 +327,10 @@ if result.returncode == 0:
 data = click.output.run_command_and_parse_json("kubectl get pods -o json")
 print(f"Found {len(data['items'])} pods")
 ```
+
+When plain mode is active, `click.output` switches to the plain formatter and `click.output.run_command(...)` uses the
+non-PTY subprocess path. UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
+downstream tools produce plain output too.
 
 ## Tips
 
