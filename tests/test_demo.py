@@ -198,14 +198,18 @@ class TestDemoCLI(unittest.TestCase):
         result = self.run_command(["--help"], env={"ULTRACLICK_COLORS": "1"})
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
-        self.assertIn("╭─ Options", result.stdout)
+        # Rich output may render with Unicode or ASCII box characters depending on
+        # the platform and terminal capabilities, so only assert the rich-panel path.
+        self.assertTrue("╭─ Options" in result.stdout or "+- Options" in result.stdout)
 
     def test_force_colors_restores_rich_formatter_output(self):
         """ULTRACLICK_COLORS must also restore the rich formatter headline path."""
         result = self.run_command(["status"], env={"ULTRACLICK_COLORS": "1"})
         self.assertEqual(result.returncode, 0)
         self.assertIn("Status: Running", result.stdout)
-        self.assertIn("→ Demo Status", result.stderr)
+        # Windows may escape the arrow instead of emitting the glyph directly, but
+        # both forms prove the rich formatter path ran instead of the plain one.
+        self.assertTrue("→ Demo Status" in result.stderr or "\\u2192 Demo Status" in result.stderr)
         self.assertNotIn("# Demo Status", result.stderr)
 
 if __name__ == '__main__':
