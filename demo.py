@@ -24,8 +24,10 @@ class ConfigCommand:
 
     This command group shows help when called directly (default behavior).
     """
-    @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
-    def __init__(self, config_dir):
+    @click.option("--config-dir", type=pathlib.Path, help="Configuration directory")
+    def __init__(self, config_dir="./config"):
+        # UltraClick can infer the CLI default from the Python signature, so the
+        # decorator only needs the option metadata.
         # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
 
@@ -69,8 +71,9 @@ class ResourceCommand:
     This command group performs an action when called directly (no help shown).
     """
     @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
-                  default="server", help="Type of resource to manage")
-    def __init__(self, resource_type):
+                  help="Type of resource to manage")
+    def __init__(self, resource_type="server"):
+        # The signature carries the default so help output and runtime behavior stay in sync.
         self.resource_type = resource_type
 
         # Access shared data from parent command
@@ -91,10 +94,11 @@ class ResourceCommand:
 
     @click.command()
     @click.argument("name")
-    @click.option("--size", default="medium", help="Resource size (small, medium, large)")
-    @click.option("--region", default="us-east", help="Deployment region")
-    def create(self, name, size, region):
+    @click.option("--size", help="Resource size (small, medium, large)")
+    @click.option("--region", help="Deployment region")
+    def create(self, name, size="medium", region="us-east"):
         """Create a new resource."""
+        # Command defaults live on the method signature for the same reason as group defaults above.
         # Use the profile from instance state instead of context
         return (
             f"Creating {self.resource_type} '{name}'\n"
@@ -130,12 +134,13 @@ class MainApp:
     resource = ResourceCommand
 
     @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
-    @click.option("--profile", default="default", help="Configuration profile to use")
-    @click.option("--env", default="development",
+    @click.option("--profile", help="Configuration profile to use")
+    @click.option("--env",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
     @click.version_option(version="1.0")
-    def __init__(self, verbose, profile, env):
+    def __init__(self, verbose, profile="default", env="development"):
+        # The signature is the preferred place for option defaults in UltraClick examples.
         # Store options as instance variables
         self.verbose = verbose
         self.profile = profile

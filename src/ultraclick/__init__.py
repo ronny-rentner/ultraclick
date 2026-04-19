@@ -691,6 +691,13 @@ def option(*param_decls, **kwargs):
     function signature if not explicitly provided.
     """
     def decorator(func):
+        # UltraClick keeps option help honest by showing defaults whenever a default
+        # exists and the caller did not make an explicit show_default choice.
+        # This applies both to defaults declared in the decorator itself and to
+        # defaults inferred from the Python signature below.
+        if "default" in kwargs and "show_default" not in kwargs:
+            kwargs["show_default"] = True
+
         # Retrieve the function's signature
         sig = inspect.signature(func)
         param_name = param_decls[0].lstrip('-').replace('-', '_')  # Normalize parameter name
@@ -699,7 +706,8 @@ def option(*param_decls, **kwargs):
         param = sig.parameters.get(param_name)
         if param and param.default != inspect.Parameter.empty and "default" not in kwargs:
             kwargs["default"] = param.default
-            kwargs["show_default"] = True
+            if "show_default" not in kwargs:
+                kwargs["show_default"] = True
 
         # Delegate to the original click.option
         return click.option(*param_decls, **kwargs)(func)

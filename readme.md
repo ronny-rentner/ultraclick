@@ -83,8 +83,8 @@ class ConfigCommand:
 
     This command group shows help when called directly (default behavior).
     """
-    @click.option("--config-dir", type=pathlib.Path, default="./config", help="Configuration directory")
-    def __init__(self, config_dir):
+    @click.option("--config-dir", type=pathlib.Path, help="Configuration directory")
+    def __init__(self, config_dir="./config"):
         # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
 
@@ -128,8 +128,8 @@ class ResourceCommand:
     This command group performs an action when called directly (no help shown).
     """
     @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
-                  default="server", help="Type of resource to manage")
-    def __init__(self, resource_type):
+                  help="Type of resource to manage")
+    def __init__(self, resource_type="server"):
         self.resource_type = resource_type
 
         # Access shared data from parent command
@@ -137,9 +137,9 @@ class ResourceCommand:
 
     @click.command()
     @click.argument("name")
-    @click.option("--size", default="medium", help="Resource size (small, medium, large)")
-    @click.option("--region", default="us-east", help="Deployment region")
-    def create(self, name, size, region):
+    @click.option("--size", help="Resource size (small, medium, large)")
+    @click.option("--region", help="Deployment region")
+    def create(self, name, size="medium", region="us-east"):
         """Create a new resource."""
         # Use the profile from instance state instead of context
         return (
@@ -176,12 +176,12 @@ class MainApp:
     resource = ResourceCommand
 
     @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
-    @click.option("--profile", default="default", help="Configuration profile to use")
-    @click.option("--env", default="development",
+    @click.option("--profile", help="Configuration profile to use")
+    @click.option("--env",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
     @click.version_option(version="1.0")
-    def __init__(self, verbose, profile, env):
+    def __init__(self, verbose, profile="default", env="development"):
         # Store options as instance variables
         self.verbose = verbose
         self.profile = profile
@@ -247,6 +247,14 @@ Plain text output is selected automatically when stdout or stderr is not a TTY, 
 is present. Set `ULTRACLICK_PLAIN=1` to force plain Click-style output even in an interactive terminal. Set
 `ULTRACLICK_COLORS=1` to force Rich output and override plain-mode detection, including `ULTRACLICK_PLAIN`.
 
+Option defaults are shown in help output when an option has a default value, whether that default was declared in the
+decorator or inferred from the Python signature. If you need different behavior, pass Click's `show_default=...`
+explicitly on that option.
+
+The preferred UltraClick style is to put defaults on the Python function signature and keep `@click.option(...)`
+focused on option names, types, and help text. Decorator defaults still work, but signature defaults keep the Python
+call shape and CLI help output driven by the same source.
+
 ### Main Help
 ```
  Usage: demo [OPTIONS] COMMAND [ARGS]...                                     
@@ -256,7 +264,9 @@ is present. Set `ULTRACLICK_PLAIN=1` to force plain Click-style output even in a
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --verbose                                    Enable verbose output           │
 │ --profile  TEXT                              Configuration profile to use    │
-│ --env      [development|staging|production]  Environment to run in           │
+│                                               [default: default]            │
+│ --env      [development|staging|production]  Environment to run in          │
+│                                               [default: development]        │
 │ --version                                    Show the version and exit.      │
 │ --help                                       Show this message and exit.     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -337,6 +347,11 @@ downstream tools produce plain output too.
 ### Flexible Parameter Ordering
 By default, **ultraclick** allows global options to be placed after subcommands (e.g., `./demo.py status --verbose`). It includes robust logic to ensure `--help` flags are correctly routed to the target command even when deep in the hierarchy.
 
+### Defaults In Help
+By default, option help shows the effective default value. The preferred pattern is to put that default on the Python
+function signature, for example `def __init__(self, profile="default")`, and let UltraClick's `@click.option(...)`
+wrapper expose it in the CLI. Explicit decorator defaults still work when you need them.
+
 ## Development
 
 ### Setup
@@ -344,9 +359,9 @@ By default, **ultraclick** allows global options to be placed after subcommands 
 2.  Install dependencies: `pip install -e .`
 
 ### Testing
-Run the included unit tests using the standard Python `unittest` module:
+Run the included unit tests through the project's unittest entrypoint:
 ```bash
-python -m unittest discover tests
+python -m tests
 ```
 
 ## License

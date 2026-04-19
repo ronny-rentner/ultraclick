@@ -164,6 +164,20 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("Usage: demo.py status", result.stdout)
         self.assertNotIn("Status: Running", result.stdout)
 
+    def test_main_help_shows_option_defaults(self):
+        """Main help should show declared default values for options."""
+        result = self.run_command(["--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertRegex(result.stdout, r"\[default:\s+default\]")
+        self.assertRegex(result.stdout, r"\[default:\s+development\]")
+
+    def test_subcommand_help_shows_option_defaults(self):
+        """Nested command help should show declared default values for options."""
+        result = self.run_command(["resource", "create", "--help"])
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("[default: medium]", result.stdout)
+        self.assertIn("[default: us-east]", result.stdout)
+
     def test_non_tty_defaults_to_plain_help(self):
         """Captured subprocess help should default to plain Click output outside a TTY."""
         result = self.run_command(["--help"])

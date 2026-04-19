@@ -12,9 +12,11 @@
 - Use nested classes for subcommand groups instead of manual registration code.
 - Put group-level options on `__init__`.
 - Put command-local options and arguments on the command method.
+- Prefer putting defaults on the Python function signature instead of in `@click.option(...)`.
 - Decorate command methods with `@click.command()`.
 - Use `@click.main_group` for normal CLIs.
 - Use `click.group_from_class(...)` with `__run__` only for very small scripts with no subcommands.
+- Assume option defaults will appear in help unless generated code explicitly passes `show_default=...`.
 
 ## State And Context
 
