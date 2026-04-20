@@ -406,8 +406,8 @@ class OutputFormatter:
                 return s
         return '/bin/sh'
 
-    def title(self, project_name):
-        self.console.print(f"Docker Manager: [bold magenta]{project_name}[/bold magenta]")
+    def title(self, title, project_name):
+        self.console.print(f"{title}: [bold magenta]{project_name}[/bold magenta]")
 
     def main_operation(self, operation_name):
         panel = rich.panel.Panel(
@@ -655,8 +655,8 @@ class PlainOutputFormatter(OutputFormatter):
         self._silenced = False
         self.shell = self._find_shell()
 
-    def title(self, project_name):
-        self.console.print(f"Docker Manager: {project_name}")
+    def title(self, title, project_name):
+        self.console.print(f"{title}: {project_name}")
 
     def main_operation(self, operation_name):
         self.console.print(f"== {operation_name} ==")
