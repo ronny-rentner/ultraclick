@@ -364,6 +364,24 @@ Run the included unit tests through the project's unittest entrypoint:
 python -m tests
 ```
 
+### Release
+Releases are tag-driven through the GitHub Actions release workflow.
+
+The workflow runs only when a Git tag matching `v*` is pushed.
+
+1.  Bump the package version in `pyproject.toml`.
+2.  Commit and push that change to `main`.
+3.  Create a matching tag such as `v0.2.4`.
+4.  Push the tag.
+5.  Verify the GitHub Actions `Release` workflow run and wait for it to finish.
+
+```bash
+git tag v0.2.4
+git push origin v0.2.4
+gh run list -L 10
+gh run watch <run-id> --exit-status
+```
+
 ## License
 
 GPLv3

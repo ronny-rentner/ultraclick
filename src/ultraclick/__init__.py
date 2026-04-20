@@ -666,9 +666,9 @@ class PlainOutputFormatter(OutputFormatter):
         self.console.print(f"Environment: {env_name}")
         self.console.print(f"Python venv: {venv_path}")
 
-    def headline(self, message, icon=">"):
+    def headline(self, message, icon="#"):
         self.console.print("")
-        self.console.print(f"# {message}")
+        self.console.print(f"{icon} {message}")
 
     def error(self, message):
         self.console.print(f"ERROR: {message}")
