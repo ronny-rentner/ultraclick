@@ -1,6 +1,7 @@
 import errno
 import inspect
 import json
+import logging
 import os
 import shlex
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import sys
 from functools import partial, wraps
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 # Explicit UltraClick overrides win over terminal heuristics.
 FORCE_COLORS = os.environ.get('ULTRACLICK_COLORS', '').lower() in {'1', 'true', 'yes', 'on'}
@@ -84,6 +86,53 @@ class ClickContextProxy:
         return repr(ctx)
 
 ctx = ClickContextProxy()
+
+class URLParamType(click.ParamType):
+    name = "url"
+
+    def convert(self, value, param, ctx):
+        # URL values must be absolute HTTP(S) URLs so command code can use them without
+        # repeating the same scheme/netloc checks at every call site.
+        parsed_url = urlparse(value)
+        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+            self.fail(f"{value!r} is not an absolute HTTP(S) URL", param, ctx)
+        return value
+
+URL = URLParamType()
+
+class UltraClickLogHandler(logging.Handler):
+    """
+    Route Python logging records through UltraClick's output formatter.
+    """
+
+    def emit(self, record):
+        # Logging must never turn a formatting/display issue into a command failure.
+        try:
+            message = self.format(record)
+            if record.levelno >= logging.ERROR:
+                output.error(message)
+            elif record.levelno >= logging.WARNING:
+                output.warning(message)
+            else:
+                output.info(message)
+        except Exception:
+            self.handleError(record)
+
+def configure_logging(capture_logs=True):
+    if not capture_logs:
+        return
+
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers:
+        if isinstance(handler, UltraClickLogHandler):
+            return
+
+    handler = UltraClickLogHandler()
+    handler.setFormatter(logging.Formatter("%(name)s | %(message)s"))
+    root_logger.handlers = [handler]
+    # The default mirrors common CLI behavior: warnings and errors are shown,
+    # while informational library chatter stays hidden until a later verbosity option exists.
+    root_logger.setLevel(logging.WARNING)
 
 class RichCommand(click.RichCommand):
     """
@@ -306,7 +355,7 @@ def main_group(*args, **kwargs):
         return group_from_class(cls, *args, **kwargs)
     return decorator
 
-def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_meta=None, **kwargs):
+def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_meta=None, capture_logs=True, **kwargs):
     """
     Dynamically create a Click command group from a class.
 
@@ -315,6 +364,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         name: The name of the command (defaults to lowercase class name)
         help: Help text for the command (defaults to class docstring)
         parent_key: Key to use for parent command in context metadata
+        capture_logs: Whether to route Python logging through UltraClick output
         context_settings: Dict with context settings like 'meta', 'allow_interspersed_args', etc.
     """
     if name is None:
@@ -340,6 +390,8 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     @click.pass_context
     @wraps(cls.__init__)
     def group_cmd(ctx, *args, **kwargs):
+        configure_logging(capture_logs=capture_logs)
+
         if instance_key in ctx.meta:
             instance = ctx.meta[instance_key]
         else:
@@ -364,7 +416,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     # Attach metadata for early initialization and discovery
     group_cmd.source_class = cls
     group_cmd.instance_key = instance_key
-    group_cmd.group_kwargs = kwargs
+    group_cmd.group_kwargs = {**kwargs, 'capture_logs': capture_logs}
 
     # Perform initial discovery
     group_cmd._discover()

@@ -49,6 +49,12 @@
 - `ULTRACLICK_COLORS=1` forces Rich output and overrides plain-mode detection, including `ULTRACLICK_PLAIN`.
 - In plain mode, `click.output.run_command(...)` uses the non-PTY subprocess path and passes plain-output environment settings to child commands.
 
+## Shell Completion
+
+- Shell completion scripts are generated with `_<COMMAND>_COMPLETE=<shell>_source <command>`.
+- Convert command names to completion variable names by uppercasing them and replacing dashes or dots with underscores.
+- For `demo.py`, use `_DEMO_PY_COMPLETE=bash_source ./demo.py`.
+
 ## Efficiency Checklist
 
 1. Read `readme.md` fully.

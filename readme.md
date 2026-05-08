@@ -352,6 +352,18 @@ By default, option help shows the effective default value. The preferred pattern
 function signature, for example `def __init__(self, profile="default")`, and let UltraClick's `@click.option(...)`
 wrapper expose it in the CLI. Explicit decorator defaults still work when you need them.
 
+### Shell Completion
+Generate a shell completion script by setting the command's completion environment variable to `<shell>_source`.
+
+```bash
+_DEMO_PY_COMPLETE=bash_source ./demo.py
+_DEMO_PY_COMPLETE=zsh_source ./demo.py
+_DEMO_PY_COMPLETE=fish_source ./demo.py
+```
+
+The variable name is `_<COMMAND>_COMPLETE`, with the command name uppercased and dashes or dots changed to underscores.
+For a command named `my-tool`, use `_MY_TOOL_COMPLETE`.
+
 ## Development
 
 ### Setup
