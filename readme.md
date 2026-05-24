@@ -371,9 +371,9 @@ For a command named `my-tool`, use `_MY_TOOL_COMPLETE`.
 2.  Install dependencies: `pip install -e .`
 
 ### Testing
-Run the included unit tests through the project's unittest entrypoint:
+Run the included unit tests:
 ```bash
-python -m tests
+python -m unittest discover -s ./tests -b
 ```
 
 ### Release

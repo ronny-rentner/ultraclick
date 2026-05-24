@@ -564,8 +564,10 @@ class OutputFormatter:
         #env["FORCE_COLOR"] = "1"  # Enable forced color output for commands that respect it
         #env["COMPOSE_PROGRESS"] = "plain"
 
-        # Plain mode avoids PTYs so subprocesses behave like non-interactive plain-text tools.
-        if PLAIN_TEXT_MODE or os.name == 'nt':
+        # JSON parsing requires unmixed streams: a PTY merges stderr into stdout, so any
+        # subprocess warning on stderr (Node DEP0169, Python DeprecationWarning, etc.)
+        # would corrupt json.loads. Always use the non-PTY path when parse_json is requested.
+        if parse_json or PLAIN_TEXT_MODE or os.name == 'nt':
             result = subprocess.run(command, shell=True, text=True, capture_output=True, env=env)
             if not suppress:
                 print(result.stdout, end="")
@@ -654,15 +656,6 @@ class OutputFormatter:
                     self.failure(f"Command failed with return code {process.returncode}.")
                 if error_handling:
                     sys.exit(process.returncode)
-
-            # Handle JSON parsing if requested
-            if parse_json:
-                try:
-                    return json.loads(stdout_bytes.decode("utf-8"))
-                except json.JSONDecodeError as e:
-                    if not suppress:
-                        self.error(f"JSON decode error: {e.msg} at line {e.lineno} column {e.colno}")
-                    return {}
 
             # Return result as a simple namespace for compatibility
             return SimpleNamespace(
