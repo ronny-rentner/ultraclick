@@ -179,11 +179,11 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("[default: us-east]", result.stdout)
 
     def test_non_tty_defaults_to_plain_help(self):
-        """Captured subprocess help should default to plain Click output outside a TTY."""
+        """Captured subprocess help should default to plain, box-free output outside a TTY."""
         result = self.run_command(["--help"])
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
-        self.assertIn("Options:", result.stdout)
+        self.assertIn("Options", result.stdout)
         self.assertNotIn("╭", result.stdout)
 
     def test_term_dumb_forces_plain_help(self):

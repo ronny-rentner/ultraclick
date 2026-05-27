@@ -25,17 +25,32 @@ PLAIN_TEXT_MODE = not FORCE_COLORS and (
     or not sys.stderr.isatty()
 )
 
+import rich
+import rich.console
+import rich.panel
+import rich_click as click
+
+# Plain mode renders help through rich_click with color, boxes, and markup turned
+# off rather than swapping to stock click: stock click cannot display argument help
+# and the two libraries do not accept the same decorator kwargs.
 if PLAIN_TEXT_MODE:
-    import click
-    # Plain mode keeps the rest of the module uniform by mapping Rich class names
-    # back to stock Click classes when rich_click is not in use.
-    click.RichCommand = click.Command
-    click.RichGroup = click.Group
-else:
-    import rich
-    import rich.console
-    import rich.panel
-    import rich_click as click
+    click.rich_click.COLOR_SYSTEM = None
+    click.rich_click.TEXT_MARKUP = None
+    # Borderless panels everywhere. The error panel resolves its box as
+    # `style_errors_panel_box or "ROUNDED"`, so None falls back to a box — use
+    # the all-spaces "BLANK" box to render no border characters at all.
+    click.rich_click.STYLE_OPTIONS_PANEL_BOX = "BLANK"
+    click.rich_click.STYLE_COMMANDS_PANEL_BOX = "BLANK"
+    click.rich_click.STYLE_ERRORS_PANEL_BOX = "BLANK"
+    click.rich_click.STYLE_OPTIONS_TABLE_BOX = "BLANK"
+    click.rich_click.STYLE_COMMANDS_TABLE_BOX = "BLANK"
+    # Without a terminal to size against, rich falls back to 80 columns and
+    # fragments help tables and error messages across lines. Use a stable, wider
+    # canvas for headless output; a real (forced-plain) terminal keeps its
+    # detected width.
+    if not sys.stdout.isatty():
+        click.rich_click.WIDTH = 120
+        click.rich_click.MAX_WIDTH = 120
 from click import *
 
 import codecs
