@@ -33,6 +33,14 @@ class TestRunCommandParseJson(unittest.TestCase):
             result = self.formatter.run_command(cmd, silent=True, parse_json=True)
         self.assertEqual(result, {'icons': [1, 2, 3]})
 
+    def test_parse_json_keeps_configured_bash_shell(self):
+        # Bash array syntax is rejected by /bin/sh, so this command proves
+        # parse_json preserved the configured shell while leaving the PTY path.
+        cmd = "items=(alpha beta); printf '{\"selected\":\"%s\"}\\n' \"${items[1]}\""
+        with mock.patch.object(ultraclick, 'PLAIN_TEXT_MODE', False):
+            result = self.formatter.run_command(cmd, silent=True, parse_json=True)
+        self.assertEqual(result, {'selected': 'beta'})
+
     def test_returns_empty_dict_silently_when_stdout_is_not_json(self):
         # silent=True is the caller's silence contract: malformed stdout
         # returns {} with no output and no exception.
@@ -53,6 +61,17 @@ class TestRunCommandParseJson(unittest.TestCase):
         self.assertIn('on-stdout', result.stdout)
         self.assertIn('on-stderr', result.stdout)
         self.assertEqual(result.stderr, '')
+
+
+class TestShellDiscovery(unittest.TestCase):
+
+    def test_windows_shell_uses_comspec(self):
+        # The non-PTY subprocess path passes executable=self.shell, so Windows
+        # must resolve self.shell to the native command shell instead of /bin/sh.
+        formatter = object.__new__(ultraclick.OutputFormatter)
+        with mock.patch.object(ultraclick.os, 'name', 'nt'):
+            with mock.patch.dict(ultraclick.os.environ, {'COMSPEC': 'C:\\Windows\\System32\\cmd.exe'}):
+                self.assertEqual(formatter._find_shell(), 'C:\\Windows\\System32\\cmd.exe')
 
 
 if __name__ == '__main__':

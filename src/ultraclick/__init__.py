@@ -468,6 +468,9 @@ class OutputFormatter:
 
     def _find_shell(self):
         """Find a suitable shell, preferring bash over sh for better proctitle support."""
+        if os.name == 'nt':
+            # Windows shell=True expects the native command shell, not a POSIX fallback path.
+            return os.environ.get('COMSPEC', 'cmd.exe')
         for s in ['/bin/bash', '/usr/bin/bash', '/bin/sh']:
             if os.path.exists(s):
                 return s
@@ -583,7 +586,7 @@ class OutputFormatter:
         # subprocess warning on stderr (Node DEP0169, Python DeprecationWarning, etc.)
         # would corrupt json.loads. Always use the non-PTY path when parse_json is requested.
         if parse_json or PLAIN_TEXT_MODE or os.name == 'nt':
-            result = subprocess.run(command, shell=True, text=True, capture_output=True, env=env)
+            result = subprocess.run(command, shell=True, executable=self.shell, text=True, capture_output=True, env=env)
             if not suppress:
                 print(result.stdout, end="")
                 print(result.stderr, end="", file=sys.stderr)
