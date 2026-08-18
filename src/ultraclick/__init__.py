@@ -21,8 +21,8 @@ PLAIN_TEXT_MODE = not FORCE_COLORS and (
     FORCE_PLAIN_TEXT
     or 'NO_COLOR' in os.environ
     or os.environ.get('TERM') == 'dumb'
-    or not sys.stdout.isatty()
-    or not sys.stderr.isatty()
+    or sys.stdout is None or not sys.stdout.isatty()
+    or sys.stderr is None or not sys.stderr.isatty()
 )
 
 import rich
@@ -48,7 +48,7 @@ if PLAIN_TEXT_MODE:
     # fragments help tables and error messages across lines. Use a stable, wider
     # canvas for headless output; a real (forced-plain) terminal keeps its
     # detected width.
-    if not sys.stdout.isatty():
+    if sys.stdout is None or not sys.stdout.isatty():
         click.rich_click.WIDTH = 120
         click.rich_click.MAX_WIDTH = 120
 from click import *
