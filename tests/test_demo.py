@@ -1,11 +1,13 @@
 import unittest
 import subprocess
 import os
+import re
 import sys
 
 # Get the project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DEMO_SCRIPT = os.path.join(PROJECT_ROOT, 'demo.py')
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 class TestDemoCLI(unittest.TestCase):
     """Test the demo CLI by actually running it as a subprocess"""
@@ -197,10 +199,13 @@ class TestDemoCLI(unittest.TestCase):
         """ULTRACLICK_COLORS must override non-TTY plain-mode fallback for help output."""
         result = self.run_command(["--help"], env={"ULTRACLICK_COLORS": "1"})
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        # Forced colors interleave ANSI codes with the text, so assert on the stripped output.
+        self.assertIn("\x1b[", result.stdout)
+        plain = ANSI_RE.sub("", result.stdout)
+        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", plain)
         # Rich output may render with Unicode or ASCII box characters depending on
         # the platform and terminal capabilities, so only assert the rich-panel path.
-        self.assertTrue("╭─ Options" in result.stdout or "+- Options" in result.stdout)
+        self.assertTrue("╭─ Options" in plain or "+- Options" in plain)
 
     def test_force_colors_restores_rich_formatter_output(self):
         """ULTRACLICK_COLORS must also restore the rich formatter headline path."""

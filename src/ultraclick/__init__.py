@@ -51,6 +51,10 @@ if PLAIN_TEXT_MODE:
     if sys.stdout is None or not sys.stdout.isatty():
         click.rich_click.WIDTH = 120
         click.rich_click.MAX_WIDTH = 120
+elif FORCE_COLORS:
+    # rich_click builds its own console and re-runs rich's tty detection, which strips colors
+    # when output is redirected; forcing colors means overriding that detection too.
+    click.rich_click.FORCE_TERMINAL = True
 from click import *
 
 import codecs
@@ -401,6 +405,11 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
     context_settings.setdefault('ignore_unknown_options',  True)
     context_settings.setdefault('allow_extra_args',        True)
 
+    # click.echo() strips ANSI whenever its output is not a terminal, which would undo forced
+    # colors on every help and result path; the context color flag is what it consults.
+    if FORCE_COLORS:
+        context_settings.setdefault('color', True)
+
     @click.group(name=name, help=help, cls=RichGroup, **kwargs)
     @click.pass_context
     @wraps(cls.__init__)
@@ -461,7 +470,7 @@ class OutputFormatter:
         else:
             self.columns = shutil.get_terminal_size().columns
 
-        self.console = rich.console.Console(highlight=False, file=sys.stderr)
+        self.console = rich.console.Console(highlight=False, file=sys.stderr, force_terminal=FORCE_COLORS or None)
         self._original_console_file = self.console.file
         self._silenced = False
         self.shell = self._find_shell()
