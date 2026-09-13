@@ -322,7 +322,7 @@ Access styled output methods directly:
 - `click.output.headline(msg)`
 
 #### Running Shell Commands
-Ultraclick includes a powerful command runner that preserves colors and interactivity (via PTY on Unix):
+Ultraclick streams command output as it arrives and captures it while waiting for the command to finish:
 
 ```python
 # Simple command execution
@@ -338,9 +338,14 @@ data = click.output.run_command_and_parse_json("kubectl get pods -o json")
 print(f"Found {len(data['items'])} pods")
 ```
 
-When plain mode is active, `click.output` switches to the plain formatter and `click.output.run_command(...)` uses the
-non-PTY subprocess path. UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
-downstream tools produce plain output too.
+Command output streams through a PTY on Unix outside plain mode, preserving terminal colors and behavior.
+Plain mode and Windows use a pipe. Both paths combine stdout and stderr in `result.stdout`; `result.stderr` is empty.
+`silent=True` or `suppress=True` disables output streaming to the screen but still captures the output.
+JSON parsing captures stdout separately from stderr and waits for completion, so warnings do not corrupt the JSON.
+
+When plain mode is active, UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
+downstream tools produce plain output too. Output is forwarded without waiting for a newline, but the child must
+flush its own output before UltraClick can read it.
 
 ## Tips
 
@@ -371,10 +376,7 @@ For a command named `my-tool`, use `_MY_TOOL_COMPLETE`.
 2.  Install dependencies: `pip install -e .`
 
 ### Testing
-Run the included unit tests:
-```bash
-python -m unittest discover -s ./tests -b
-```
+See [AGENTS.md — Tests](./AGENTS.md#tests) for the test command and coverage guidelines.
 
 ### Release
 Releases are tag-driven through the GitHub Actions release workflow.

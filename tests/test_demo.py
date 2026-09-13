@@ -31,10 +31,10 @@ class TestDemoCLI(unittest.TestCase):
         )
         
         # Print full output details for better debugging
-        print(f"\nCommand: python demo.py {' '.join(args)}")
-        print(f"Return code: {result.returncode}")
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
+        #print(f"\nCommand: python demo.py {' '.join(args)}")
+        #print(f"Return code: {result.returncode}")
+        #print(f"STDOUT: {result.stdout}")
+        #print(f"STDERR: {result.stderr}")
         
         return result
     

@@ -63,6 +63,9 @@ import codecs
 if os.name != 'nt':  # Not Windows
     import pty
     import termios
+else:
+    # cmd.exe needs shell escaping as well as Windows argument quoting.
+    import mslex
 
 
 class PlainTextConsole:
@@ -563,7 +566,11 @@ class OutputFormatter:
         # Accept argv-style input so callers can describe command boundaries directly and let
         # UltraClick assemble the shell string in one place before handing it to the PTY runner.
         if isinstance(command, (list, tuple)):
-            command = shlex.join([str(part) for part in command])
+            # Keep list arguments literal through the platform's shell parser.
+            if os.name == 'nt':
+                command = mslex.join([str(part) for part in command])
+            else:
+                command = shlex.join([str(part) for part in command])
 
         # Keep string input working exactly as before so existing callers can continue passing
         # prebuilt shell commands without any behavior change.
@@ -594,7 +601,7 @@ class OutputFormatter:
         # JSON parsing requires unmixed streams: a PTY merges stderr into stdout, so any
         # subprocess warning on stderr (Node DEP0169, Python DeprecationWarning, etc.)
         # would corrupt json.loads. Always use the non-PTY path when parse_json is requested.
-        if parse_json or PLAIN_TEXT_MODE or os.name == 'nt':
+        if parse_json:
             result = subprocess.run(command, shell=True, executable=self.shell, text=True, capture_output=True, env=env)
             if not suppress:
                 print(result.stdout, end="")
@@ -607,33 +614,27 @@ class OutputFormatter:
                     sys.exit(result.returncode)
 
             # Handle JSON parsing if requested
-            if parse_json:
-                try:
-                    return json.loads(result.stdout)
-                except json.JSONDecodeError as e:
-                    if not suppress:
-                        self.error(f"JSON decode error: {e.msg} at line {e.lineno} column {e.colno}")
-                    return {}
+            try:
+                return json.loads(result.stdout)
+            except json.JSONDecodeError as e:
+                if not suppress:
+                    self.error(f"JSON decode error: {e.msg} at line {e.lineno} column {e.colno}")
+                return {}
 
-            return SimpleNamespace(
-                returncode=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr
-            )
-
-        # Use PTY on Unix systems
+        # Plain output avoids terminal emulation; Windows has no Unix PTY implementation.
+        use_pty = not PLAIN_TEXT_MODE and os.name != 'nt'
         stdout_bytes = bytearray()
 
         try:
-            # Open a pseudo-terminal
-            master_fd, slave_fd = pty.openpty()
+            # Pipe and PTY descriptors share the same streaming and capture loop.
+            master_fd, slave_fd = pty.openpty() if use_pty else os.pipe()
 
             # Start the subprocess
             process = subprocess.Popen(
                 command,
                 shell=True,
                 executable=self.shell,
-                stdin=slave_fd,
+                stdin=slave_fd if use_pty else None,  # A pipe carries output only; inherit stdin.
                 stdout=slave_fd,
                 stderr=slave_fd,
                 text=False,  # Disable text mode; we will decode bytes manually
@@ -650,12 +651,14 @@ class OutputFormatter:
                     # This ensures the signal reaches the foreground process group
                     os.write(master_fd, b'\x03')
 
-            signal.signal(signal.SIGINT, forward_signal)
+            # Only PTYs accept Ctrl-C bytes; pipe children retain normal signal delivery.
+            if use_pty:
+                signal.signal(signal.SIGINT, forward_signal)
 
             decoder = codecs.getincrementaldecoder("utf-8")()
             buffer = bytearray()
 
-            # Read from the master PTY in real-time
+            # Read available bytes without waiting for a newline, from either descriptor type.
             try:
                 while True:
                     chunk = os.read(master_fd, 1024)  # Read up to 1024 bytes
@@ -664,14 +667,14 @@ class OutputFormatter:
                     stdout_bytes.extend(chunk)
                     text = decoder.decode(chunk)
                     if not suppress:
-                        print(text, end="")
+                        print(text, end="", flush=True)  # Agents also need the parent's pipe flushed.
                         #print(chunk.decode("utf-8", errors="replace"), end="")  # Decode and print
             except OSError as e:
-                if e.errno != errno.EIO:  # EIO means EOF
+                if not use_pty or e.errno != errno.EIO:  # Only a PTY reports EOF as EIO.
                     raise
             finally:
                 if not suppress:
-                    print(decoder.decode(b"", final=True), end="")
+                    print(decoder.decode(b"", final=True), end="", flush=True)
                 os.close(master_fd)  # Ensure the fd is closed
 
             # Wait for the process to complete
@@ -688,7 +691,7 @@ class OutputFormatter:
             return SimpleNamespace(
                 returncode=process.returncode,
                 stdout=stdout_bytes.decode("utf-8", errors="replace"),  # Decode captured output
-                stderr=""  # stderr is combined with stdout in PTY
+                stderr=""  # Both descriptor types combine stderr with stdout.
             )
 
         except subprocess.CalledProcessError as e:

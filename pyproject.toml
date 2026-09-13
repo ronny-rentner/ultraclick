@@ -29,7 +29,8 @@ classifiers = [
 dependencies = [
   "click >= 8.1.8",
   "rich >= 14.0.0",
-  "rich_click >= 1.8.0"
+  "rich_click >= 1.8.0",
+  "mslex; sys_platform == 'win32'"
 ]
 
 [project.optional-dependencies]
