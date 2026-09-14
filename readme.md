@@ -257,7 +257,7 @@ call shape and CLI help output driven by the same source.
 
 ### Main Help
 ```
- Usage: demo [OPTIONS] COMMAND [ARGS]...                                     
+ Usage: demo [OPTIONS] [COMMAND] [ARGS]...
                                                                                 
  Main demo application showcasing ultraclick's features.                        
                                                                                 

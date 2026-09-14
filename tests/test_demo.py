@@ -184,7 +184,8 @@ class TestDemoCLI(unittest.TestCase):
         """Captured subprocess help should default to plain, box-free output outside a TTY."""
         result = self.run_command(["--help"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        # The group accepts invocation without a subcommand.
+        self.assertIn("Usage: demo.py [OPTIONS] [COMMAND] [ARGS]...", result.stdout)
         self.assertIn("Options", result.stdout)
         self.assertNotIn("╭", result.stdout)
 
@@ -192,7 +193,8 @@ class TestDemoCLI(unittest.TestCase):
         """TERM=dumb should keep help output in the plain text path."""
         result = self.run_command(["--help"], env={"TERM": "dumb"})
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", result.stdout)
+        # The group accepts invocation without a subcommand.
+        self.assertIn("Usage: demo.py [OPTIONS] [COMMAND] [ARGS]...", result.stdout)
         self.assertNotIn("╭", result.stdout)
 
     def test_force_colors_restores_rich_help(self):
@@ -202,7 +204,8 @@ class TestDemoCLI(unittest.TestCase):
         # Forced colors interleave ANSI codes with the text, so assert on the stripped output.
         self.assertIn("\x1b[", result.stdout)
         plain = ANSI_RE.sub("", result.stdout)
-        self.assertIn("Usage: demo.py [OPTIONS] COMMAND [ARGS]...", plain)
+        # The group accepts invocation without a subcommand.
+        self.assertIn("Usage: demo.py [OPTIONS] [COMMAND] [ARGS]...", plain)
         # Rich output may render with Unicode or ASCII box characters depending on
         # the platform and terminal capabilities, so only assert the rich-panel path.
         self.assertTrue("╭─ Options" in plain or "+- Options" in plain)

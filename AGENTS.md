@@ -27,7 +27,7 @@ Keep `demo.py` aligned with the library's behavior.
 
 - `__init__` receives options and performs setup.
 - `__run__` runs only when no subcommand is provided. Without it, the group shows help.
-- Usage includes `COMMAND [ARGS]...` only when subcommands exist.
+- Usage includes `[COMMAND] [ARGS]...` only when subcommands exist; invoking a group without a subcommand is allowed by default.
 - Class docstrings can supply help text. Empty descriptions stay empty.
 
 ## Tests

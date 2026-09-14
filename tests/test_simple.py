@@ -22,7 +22,8 @@ class TestSimpleCLI(unittest.TestCase):
         result = self.run_command(["--help"])
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: simple.py [OPTIONS]", result.stdout)
-        self.assertNotIn("COMMAND [ARGS]", result.stdout)
+        # An optional command placeholder still advertises nonexistent subcommands.
+        self.assertNotIn("COMMAND", result.stdout)
 
 
 if __name__ == '__main__':
