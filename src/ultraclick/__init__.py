@@ -55,6 +55,9 @@ elif FORCE_COLORS:
     # rich_click builds its own console and re-runs rich's tty detection, which strips colors
     # when output is redirected; forcing colors means overriding that detection too.
     click.rich_click.FORCE_TERMINAL = True
+    if os.name == 'nt' and (sys.stdout is None or not sys.stdout.isatty()):
+        # RichClick's legacy-Windows path installs Colorama, which strips ANSI from redirected output.
+        click.rich_click.LEGACY_WINDOWS = False
 from click import *
 
 import codecs

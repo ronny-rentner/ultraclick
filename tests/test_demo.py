@@ -295,5 +295,14 @@ class TestDemoCLI(unittest.TestCase):
         self.assertTrue("→ Demo Status" in result.stderr or "\\u2192 Demo Status" in result.stderr)
         self.assertNotIn("# Demo Status", result.stderr)
 
+    def test_force_colors_preserves_nested_help(self):
+        # Child help must retain ANSI in pipes, including abbreviated and look-ahead forms.
+        for args in (["resource", "create", "--help"], ["--help", "r", "c"]):
+            with self.subTest(args=args):
+                result = self.run_command(args, env={"ULTRACLICK_COLORS": "1"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("\x1b[", result.stdout)
+                self.assertIn("Usage: demo.py resource create", ANSI_RE.sub("", result.stdout))
+
 if __name__ == '__main__':
     unittest.main()
