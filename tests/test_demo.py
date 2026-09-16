@@ -3,6 +3,10 @@ import subprocess
 import os
 import re
 import sys
+from unittest.mock import patch
+
+import ultraclick as click
+from demo import MainApp
 
 # Get the project root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -10,7 +14,7 @@ DEMO_SCRIPT = os.path.join(PROJECT_ROOT, 'demo.py')
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*m')
 
 class TestDemoCLI(unittest.TestCase):
-    """Test the demo CLI by actually running it as a subprocess"""
+    """Test the demo CLI through subprocesses and its command contexts."""
     
     def run_command(self, args, env=None):
         """Run the demo CLI with the given arguments and return stdout and stderr"""
@@ -60,19 +64,89 @@ class TestDemoCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Active Profile: default", result.stdout)
         self.assertIn("Config Directory: ./config", result.stdout)
-    
+
     def test_config_set_command(self):
         """Test the config set command works correctly"""
         result = self.run_command(["config", "set", "debug", "true"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Setting debug=true in profile 'default'", result.stdout)
+        # The shared getter must see the value written by the CLI-selected configuration instance.
+        self.assertEqual(result.stdout, "true\n")
+
+    def test_invoke_nested_command(self):
+        """Resource creation reads its default region through the configuration command."""
+        # Config has not been selected on the CLI and must be initialized by ctx.invoke().
+        for args in (["--profile", "production", "resource", "create", "mydb"],
+                     ["r", "c", "mydb", "--profile", "production"]):
+            with self.subTest(args=args):
+                result = self.run_command(args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "Creating server 'mydb'\nSize: medium\nRegion: us-east\nUsing profile: production\n")
+
+    def test_config_get_command(self):
+        """Configuration lookup returns a value usable by other commands."""
+        result = self.run_command(["config", "get", "region"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "us-east\n")
+
+    def test_invoke_requires_group_options(self):
+        # A missing group option must fail before its instance is created.
+        with MainApp.make_context("demo", ["resource"]) as root:
+            config = MainApp.get_command(root, "config")
+            option = next(param for param in config.params if param.name == "config_dir")
+            required = click.Option(["--config-dir"], required=True, type=option.type)
+            with patch.object(config, "params", [required if param is option else param for param in config.params]):
+                with self.assertRaises(click.MissingParameter) as error:
+                    click.ctx.invoke("config.get", name="region")
+                self.assertIs(error.exception.param, required)
+                self.assertNotIn(config.instance_key, root.meta)
+
+    def test_invoke_reuses_instance_through_aliases(self):
+        # The setter, getter, and aliases must all see the same mutable configuration.
+        with MainApp.make_context("demo", ["resource"]) as root:
+            config = MainApp.get_command(root, "config")
+            self.assertEqual(click.ctx.invoke("config.set", name="region", value="eu-west"), "eu-west")
+            instance = root.meta[config.instance_key]
+            for command in ("config.get", "conf.fetch"):
+                with self.subTest(command=command):
+                    self.assertEqual(click.ctx.invoke(command, name="region"), "eu-west")
+                    self.assertIs(root.meta[config.instance_key], instance)
+
+    def test_invoke_rejects_invalid_paths(self):
+        # Reject missing groups, missing commands, and leaf commands used as groups.
+        for path, message in (("missing.get", "No such command group 'missing'."),
+                              ("config.missing", "No such command 'missing'."),
+                              ("status.get", "No such command group 'status'.")):
+            with self.subTest(path=path), MainApp.make_context("demo", ["resource"]):
+                with self.assertRaises(click.UsageError) as error:
+                    click.ctx.invoke(path, name="region")
+                self.assertEqual(error.exception.message, message)
+
+    def test_invoke_keeps_application_runs_separate(self):
+        # State changed in one application run must not leak into the next run.
+        with MainApp.make_context("demo", ["resource"]) as root:
+            config = MainApp.get_command(root, "config")
+            self.assertEqual(click.ctx.invoke("config.set", name="region", value="eu-west"), "eu-west")
+            instance = root.meta[config.instance_key]
+        with MainApp.make_context("demo", ["resource"]) as root:
+            self.assertEqual(click.ctx.invoke("config.get", name="region"), "us-east")
+            self.assertIsNot(root.meta[config.instance_key], instance)
+
+    def test_shared_config_preserves_cli_options(self):
+        """The selected configuration group receives its CLI options."""
+        # Both the full and abbreviated group name must select the same configured instance.
+        for command in ("config", "conf"):
+            with self.subTest(command=command):
+                result = self.run_command([command, "--config-dir", "custom", "show"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Config Directory: ./custom", result.stdout)
     
     def test_config_alias_command(self):
         """Test that command aliases work correctly"""
         result = self.run_command(["config", "update", "debug", "false"])
         try:
             self.assertEqual(result.returncode, 0)
-            self.assertIn("Setting debug=false in profile 'default'", result.stdout)
+            # Alias forwarding must reuse the configuration instance and its updated state.
+            self.assertEqual(result.stdout, "false\n")
         except AssertionError:
             print(f"Command failed with stderr: {result.stderr}")
             raise
@@ -178,7 +252,8 @@ class TestDemoCLI(unittest.TestCase):
         result = self.run_command(["resource", "create", "--help"])
         self.assertEqual(result.returncode, 0)
         self.assertIn("[default: medium]", result.stdout)
-        self.assertIn("[default: us-east]", result.stdout)
+        # Region now comes from configuration rather than a fixed Click option default.
+        self.assertIn("defaults to config region", result.stdout)
 
     def test_non_tty_defaults_to_plain_help(self):
         """Captured subprocess help should default to plain, box-free output outside a TTY."""

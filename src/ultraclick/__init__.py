@@ -97,6 +97,32 @@ class ClickContextProxy:
         ctx = click.get_current_context()
         return ctx[key]
 
+    def invoke(self, callback, /, *args, **kwargs):
+        """Invoke a command object or a root-relative command path."""
+        current = click.get_current_context()
+        if isinstance(callback, str):
+            context = current.find_root()
+            group = context.command
+            path = callback.split('.')
+
+            for name in path[:-1]:
+                group = group.get_command(context, name)
+                if not isinstance(group, RichGroup):
+                    context.fail(f"No such command group '{name}'.")
+
+                # Existing instances already have their parsed options and state.
+                if group.instance_key not in context.meta:
+                    # '--' avoids no-argument help while preserving required-option validation.
+                    context = group.make_context(name, ['--'], parent=context)
+                    context.find_root().call_on_close(context.close)
+
+            callback = group.get_command(context, path[-1])
+            if callback is None:
+                context.fail(f"No such command '{path[-1]}'.")
+
+        # Keep Click's normal invocation behavior and caller context.
+        return current.invoke(callback, *args, **kwargs)
+
     # TODO: This method crashes because click.Context is not callable.
     #       Keeping it commented out for now to verify no downstream usage relies on it.
     # def __call__(self, *args, **kwargs):

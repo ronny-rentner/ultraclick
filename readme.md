@@ -74,6 +74,7 @@ This demo systematically showcases ultraclick's main features:
 import pathlib
 
 import ultraclick as click
+from ultraclick import ctx
 
 
 class ConfigCommand:
@@ -87,6 +88,9 @@ class ConfigCommand:
     def __init__(self, config_dir="./config"):
         # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
+
+        # Demo configuration lasts for this invocation.
+        self.values = {"region": "us-east"}
 
         # Access shared data from global context
         self.profile = click.ctx.meta["profile"]
@@ -105,7 +109,9 @@ class ConfigCommand:
     @click.argument("value")
     def set(self, name, value):
         """Set a configuration value."""
-        return f"Setting {name}={value} in profile '{self.profile}'"
+        self.values[name] = value
+        # Read back through the same configuration instance.
+        return ctx.invoke("config.get", name=name)
 
     # Command alias demonstration
     update = click.alias(set)
@@ -114,7 +120,9 @@ class ConfigCommand:
     @click.argument("name")
     def get(self, name):
         """Get a configuration value."""
-        return f"Getting '{name}' from profile '{self.profile}'"
+        if name not in self.values:
+            raise click.ClickException(f"Unknown configuration value: {name}")
+        return self.values[name]
 
     # Another command alias
     fetch = click.alias(get)
@@ -138,9 +146,12 @@ class ResourceCommand:
     @click.command()
     @click.argument("name")
     @click.option("--size", help="Resource size (small, medium, large)")
-    @click.option("--region", help="Deployment region")
-    def create(self, name, size="medium", region="us-east"):
+    @click.option("--region", help="Deployment region (defaults to config region)")
+    def create(self, name, size="medium", region=None):
         """Create a new resource."""
+        # Initialize config only when its default region is needed.
+        if region is None:
+            region = ctx.invoke("config.get", name="region")
         # Use the profile from instance state instead of context
         return (
             f"Creating {self.resource_type} '{name}'\n"
@@ -312,6 +323,18 @@ click.ctx.meta["db_client"] = Database()
 db = click.ctx.meta["db_client"]
 current_cmd = click.ctx.invoked_subcommand
 ```
+
+Invoke another command by its registered path from the root group:
+
+```python
+from ultraclick import ctx
+
+region = ctx.invoke("config.get", name="region")
+```
+
+Missing owning groups are initialized through normal option parsing; required group options still cause an error
+when unavailable. Initialized groups reuse their existing instances and state. The call returns the command's value
+without automatically printing it, following Click's `Context.invoke()` behavior. Command objects remain accepted.
 
 ### Output Formatter (`click.output`)
 Access styled output methods directly:

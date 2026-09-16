@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     strategy:
+      # Keep all platform results available when one job fails.
+      fail-fast: false
       matrix:
         python: ['3.10', '3.11', '3.12', '3.13', '3.14']
         platform: [ubuntu-latest, macos-latest, windows-latest]

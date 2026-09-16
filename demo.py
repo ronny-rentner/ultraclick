@@ -15,6 +15,7 @@ import pathlib
 import sys
 
 import ultraclick as click
+from ultraclick import ctx
 
 
 class ConfigCommand:
@@ -30,6 +31,9 @@ class ConfigCommand:
         # decorator only needs the option metadata.
         # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
+
+        # Demo configuration lives for this invocation; resource creation reads its default region here.
+        self.values = {"region": "us-east"}
 
         # Access shared data from global context
         self.profile = click.ctx.meta["profile"]
@@ -48,7 +52,9 @@ class ConfigCommand:
     @click.argument("value")
     def set(self, name, value):
         """Set a configuration value."""
-        return f"Setting {name}={value} in profile '{self.profile}'"
+        self.values[name] = value
+        # Read back through the shared configuration so callers receive the stored value.
+        return ctx.invoke("config.get", name=name)
 
     # Command alias demonstration
     update = click.alias(set)
@@ -57,7 +63,10 @@ class ConfigCommand:
     @click.argument("name")
     def get(self, name):
         """Get a configuration value."""
-        return f"Getting '{name}' from profile '{self.profile}'"
+        # Return the value itself so other commands can use it through ctx.invoke().
+        if name not in self.values:
+            raise click.ClickException(f"Unknown configuration value: {name}")
+        return self.values[name]
 
     # Another command alias
     fetch = click.alias(get)
@@ -95,9 +104,12 @@ class ResourceCommand:
     @click.command()
     @click.argument("name")
     @click.option("--size", help="Resource size (small, medium, large)")
-    @click.option("--region", help="Deployment region")
-    def create(self, name, size="medium", region="us-east"):
+    @click.option("--region", help="Deployment region (defaults to config region)")
+    def create(self, name, size="medium", region=None):
         """Create a new resource."""
+        # Resolve the default through config, initializing that group only when needed.
+        if region is None:
+            region = ctx.invoke("config.get", name="region")
         # Command defaults live on the method signature for the same reason as group defaults above.
         # Use the profile from instance state instead of context
         return (
