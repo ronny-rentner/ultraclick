@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+import re
+import subprocess
+from pathlib import Path
+
+try:
+    import tomlkit
+except ModuleNotFoundError as error:
+    raise SystemExit("Install tomlkit before committing.") from error
+
+
+PYPROJECT = Path("pyproject.toml")
+
+
+content = PYPROJECT.read_text()
+document = tomlkit.parse(content)
+version = document["project"]["version"]
+match = re.fullmatch(r"(.+\.dev)(\d+)", version)
+
+if match:
+    # Only versions that already carry a .devN suffix are automatic.
+    # Final release versions stay unchanged until development is started explicitly.
+    # Start a new development series by setting .dev0 before committing.
+    # The hook then turns that first dev commit into .dev1.
+    document["project"]["version"] = f"{match.group(1)}{int(match.group(2)) + 1}"
+    PYPROJECT.write_text(tomlkit.dumps(document))
+    subprocess.run(["git", "add", str(PYPROJECT)], check=True)
