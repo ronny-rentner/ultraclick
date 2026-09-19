@@ -195,9 +195,12 @@ class RichCommand(click.RichCommand):
         self.alias = alias
 
     def invoke(self, ctx):
-        # Execute the original invoke method and capture the return value
-        result = super().invoke(ctx)
+        # Formatting must preserve the callback's return value for callers.
+        return self.print_result(super().invoke(ctx))
 
+    @staticmethod
+    def print_result(result):
+        """Print a return value without replacing it; None produces no output."""
         if result is not None:
             if isinstance(result, list):
                 for item in result:
@@ -329,7 +332,9 @@ class RichGroup(click.RichGroup):
 
     def invoke(self, ctx):
         try:
-            return super().invoke(ctx)
+            result = super().invoke(ctx)
+            # Context.invoke() bypasses this method; subcommands print their own results.
+            return RichCommand.print_result(result) if ctx.invoked_subcommand is None else result
         except (click.UsageError, click.BadOptionUsage) as exc:
             if not getattr(exc, 'dying_and_help_printed', None):
                 if ctx.invoked_subcommand:
@@ -464,6 +469,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         # Handle execution if no subcommand was invoked
         if ctx.invoked_subcommand is None:
             if hasattr(instance, "__run__") and not ctx.meta.get('ultraclick_help_requested'):
+                # Return the action's value; CLI formatting is handled by RichGroup.invoke().
                 return instance.__run__()
 
             if ctx.meta.get('show_help_on_no_command', True) or ctx.meta.get('ultraclick_help_requested'):
@@ -605,10 +611,10 @@ class OutputFormatter:
         # prebuilt shell commands without any behavior change.
         command = command.strip()
 
-        if headline:
-            self.headline(headline)
-
+        # Silent calls omit both the headline and the command echo.
         if not silent:
+            if headline:
+                self.headline(headline)
             self.command(command)
         else:
             suppress = True

@@ -48,6 +48,8 @@ For parsing and help fixes, cover the direct command and supported abbreviated o
 - `llms.md` states precise behavior needed to generate code using UltraClick.
 - `AGENTS.md` explains how to work with this repository, including running tests and making changes.
 
+Keep `src/ultraclick/llms.md` as a symlink to the root `llms.md`. Setuptools collects package data from inside the package directory; the link lets us keep the document at the repository root and include it in installed packages without maintaining a second copy or adding a custom build step.
+
 Keep information in the document that serves its audience. Link to existing instructions instead of duplicating them.
 
 Explain UltraClick's behavior directly. Preserve established README wording when it is more precise. Use short examples to clarify initialization, default actions, and help generation. Present `__run__` primarily as the default-action hook for short scripts without subcommands.

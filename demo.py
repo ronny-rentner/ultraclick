@@ -88,18 +88,14 @@ class ResourceCommand:
         # Access shared data from parent command
         self.profile = click.ctx.meta["profile"]
 
-        # Custom behavior when no subcommand is provided
-        # if click.ctx.invoked_subcommand is None:
-        #     # Prevent automatic help display
-        #     click.ctx.meta['show_help_on_no_command'] = False
-
-        #     # Show custom summary instead
-        #     click.echo(
-        #         f"Resource Management Summary:\n"
-        #         f"• Current Resource Type: {self.resource_type}\n"
-        #         f"• Available Types: server, database, storage\n"
-        #         f"• Active Profile: {self.profile}"
-        #     )
+    def __run__(self):
+        """Show the summary when no resource subcommand is selected."""
+        return (
+            f"Resource Management Summary:\n"
+            f"• Current Resource Type: {self.resource_type}\n"
+            f"• Available Types: server, database, storage\n"
+            f"• Active Profile: {self.profile}"
+        )
 
     @click.command()
     @click.argument("name")
@@ -173,15 +169,26 @@ class MainApp:
 
         click.output.headline(f'Demo Status')
 
+        # Capture the interpreter version for the report; --verbose also shows the subprocess execution.
+        runtime = click.output.run_command([sys.executable, "--version"],
+                                           headline="Checking Python version", silent=not self.verbose)
+
         return (
             f"Status: Running\n"
             f"Environment: {self.env}\n"
             f"Verbose: {self.verbose}\n"
-            f"Profile: {self.profile}"
+            f"Profile: {self.profile}\n"
+            f"Runtime: {runtime.stdout.strip()}"
         )
 
     # 'info' is an alias for the 'status' command
     info=click.alias(status)
+
+    @click.command()
+    def testraise(self):
+        click.output.headline(f'Testing Exceptions')
+        raise Exception(f'Testing Exceptions')
+
 
 if __name__ == "__main__":
     MainApp()

@@ -3,6 +3,7 @@ import subprocess
 import os
 import re
 import sys
+from io import StringIO
 from unittest.mock import patch
 
 import ultraclick as click
@@ -57,6 +58,32 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("Status: Running", result.stdout)
         self.assertIn("Environment: development", result.stdout)
         self.assertIn("Profile: default", result.stdout)
+
+    def test_status_subprocess_verbosity(self):
+        """The version probe is silent unless --verbose is supplied, in both output modes."""
+        for colors in ("0", "1"):
+            for args, version_count in ((["status"], 1), (["--verbose", "status"], 2)):
+                with self.subTest(colors=colors, args=args):
+                    result = self.run_command(args, env={"ULTRACLICK_PLAIN": "1", "ULTRACLICK_COLORS": colors})
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"Runtime: Python {sys.version.split()[0]}", result.stdout)
+                    # Verbose execution streams the version as well as including it in the final report.
+                    self.assertEqual(result.stdout.count(f"Python {sys.version.split()[0]}"), version_count)
+                    self.assertEqual("--version" in result.stderr, "--verbose" in args, result.stderr)
+                    self.assertEqual("Checking Python version" in result.stderr, "--verbose" in args, result.stderr)
+
+    def test_testraise_propagates_exception(self):
+        """Unhandled exceptions must fail the process and retain their traceback in both output modes."""
+        for colors in ("0", "1"):
+            with self.subTest(colors=colors):
+                result = self.run_command(["testraise"], env={"ULTRACLICK_PLAIN": "1", "ULTRACLICK_COLORS": colors})
+                self.assertEqual(result.returncode, 1, result.stderr)
+                # Both the heading and traceback belong on stderr; there is no command result on stdout.
+                self.assertEqual(result.stdout, "")
+                plain = ANSI_RE.sub("", result.stderr)
+                self.assertIn("Testing Exceptions", plain.partition("Traceback (most recent call last):")[0])
+                self.assertIn("Traceback (most recent call last):", plain)
+                self.assertEqual(plain.splitlines()[-1], "Exception: Testing Exceptions")
     
     def test_config_show_command(self):
         """Test the config show command returns expected output"""
@@ -64,6 +91,16 @@ class TestDemoCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Active Profile: default", result.stdout)
         self.assertIn("Config Directory: ./config", result.stdout)
+
+    def test_config_without_subcommand_shows_help(self):
+        """A group without __run__ shows help when no subcommand is selected."""
+        for command in ("config", "conf"):
+            with self.subTest(command=command):
+                result = self.run_command([command])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Usage: demo.py config", result.stdout)
+                self.assertIn("Commands", result.stdout)
+                self.assertEqual(result.stderr, "")
 
     def test_config_set_command(self):
         """Test the config set command works correctly"""
@@ -81,6 +118,14 @@ class TestDemoCLI(unittest.TestCase):
                 result = self.run_command(args)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "Creating server 'mydb'\nSize: medium\nRegion: us-east\nUsing profile: production\n")
+
+    def test_invoke_group_returns_without_printing(self):
+        """Invoking a group's default action returns its result without automatic printing."""
+        with MainApp.make_context("demo", ["status"]) as root:
+            for callback in ("resource", MainApp.get_command(root, "resource")):
+                with self.subTest(callback=callback), patch("sys.stdout", new_callable=StringIO) as stdout:
+                    self.assertIn("Resource Management Summary:", click.ctx.invoke(callback))
+                    self.assertEqual(stdout.getvalue(), "")
 
     def test_config_get_command(self):
         """Configuration lookup returns a value usable by other commands."""
@@ -151,11 +196,30 @@ class TestDemoCLI(unittest.TestCase):
             print(f"Command failed with stderr: {result.stderr}")
             raise
     
+    def test_resource_default_action(self):
+        """The default action uses initialized state for full, abbreviated, and reordered calls."""
+        for args, resource_type, profile in (
+                (["resource"], "server", "default"),
+                (["--profile", "production", "resource", "--resource-type", "database"], "database", "production"),
+                (["r", "--resource-type", "database", "--profile", "production"], "database", "production")):
+            with self.subTest(args=args):
+                result = self.run_command(args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, (
+                    f"Resource Management Summary:\n"
+                    f"• Current Resource Type: {resource_type}\n"
+                    f"• Available Types: server, database, storage\n"
+                    f"• Active Profile: {profile}\n"
+                ))
+                self.assertEqual(result.stderr, "")
+
     def test_resource_list_command(self):
         """Test the resource list command works correctly"""
         result = self.run_command(["resource", "list"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("Listing all servers (Profile: default)", result.stdout)
+        # Selecting a subcommand must skip the group's default summary.
+        self.assertEqual(result.stdout, "Listing all servers (Profile: default)\n")
+        self.assertEqual(result.stderr, "")
     
     def test_resource_create_command(self):
         """Test the resource create command with options"""
@@ -204,12 +268,16 @@ class TestDemoCLI(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: demo.py resource", result.stdout)
         self.assertIn("Commands", result.stdout)
+        # Explicit help must skip the default action even without a subcommand.
+        self.assertNotIn("Resource Management Summary:", result.stdout)
 
     def test_subcommand_help_start(self):
         """Test help before a subcommand (look-ahead)"""
         result = self.run_command(["--help", "resource"])
         self.assertEqual(result.returncode, 0)
         self.assertIn("Usage: demo.py resource", result.stdout)
+        # Look-ahead help must skip the same default action as trailing --help.
+        self.assertNotIn("Resource Management Summary:", result.stdout)
 
     def test_deep_subcommand_help_end(self):
         """Test help for a deep subcommand with required arguments"""

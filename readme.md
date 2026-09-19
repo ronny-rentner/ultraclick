@@ -15,10 +15,10 @@ Say goodbye to massive files filled with decorated functions. **ultraclick** let
 - **Full Compatibility**: 100% compatible with all **Click** and **RichClick** features, decorators, and parameter types.
 - **Natural State Management**: Share context (config, API clients, flags) between commands naturally via `self` and class instance attributes.
 - **Smart Parameter Handling**: Robust handling of global and local command-line options and arguments, even when interspersed.
-- **Context Proxy**: Access the Click context globally via `click.ctx` without messy parameter passing.
+- **Context Proxy**: Convenient access to Click’s context through `click.ctx` or a directly imported `ctx`.
 - **Deeply Nested Groups**: Create hierarchical command structures (e.g., `app resource create`) by simply nesting classes.
 - **Rich Integration**: Beautiful, colorful terminal output and enhanced help text formatting out of the box.
-- **Command Aliases & Abbreviations**: Support for command aliases (`status` -> `info`) and partial command matching (`conf s` -> `config show`).
+- **Command Aliases & Abbreviations**: Support for command aliases (`status` -> `info`) and partial command matching (`conf sh` -> `config show`).
 - **Automatic Output**: Simply return values (strings, dicts, lists) from command methods, and they are automatically formatted and printed nicely.
 
 ## Table of Contents
@@ -58,7 +58,6 @@ pip install -e .
 Here is a complete, runnable example demonstrating how to build a structured CLI with global options, nested commands, and aliases. This code corresponds to the included `demo.py`.
 
 ```python
-#!/usr/bin/env python
 """
 ultraclick Demo Application
 
@@ -72,6 +71,7 @@ This demo systematically showcases ultraclick's main features:
 """
 
 import pathlib
+import sys
 
 import ultraclick as click
 from ultraclick import ctx
@@ -86,10 +86,12 @@ class ConfigCommand:
     """
     @click.option("--config-dir", type=pathlib.Path, help="Configuration directory")
     def __init__(self, config_dir="./config"):
+        # UltraClick can infer the CLI default from the Python signature, so the
+        # decorator only needs the option metadata.
         # Store parameters as instance variables for sub-commands in this class
         self.config_dir = config_dir
 
-        # Demo configuration lasts for this invocation.
+        # Demo configuration lives for this invocation; resource creation reads its default region here.
         self.values = {"region": "us-east"}
 
         # Access shared data from global context
@@ -110,7 +112,7 @@ class ConfigCommand:
     def set(self, name, value):
         """Set a configuration value."""
         self.values[name] = value
-        # Read back through the same configuration instance.
+        # Read back through the shared configuration so callers receive the stored value.
         return ctx.invoke("config.get", name=name)
 
     # Command alias demonstration
@@ -120,6 +122,7 @@ class ConfigCommand:
     @click.argument("name")
     def get(self, name):
         """Get a configuration value."""
+        # Return the value itself so other commands can use it through ctx.invoke().
         if name not in self.values:
             raise click.ClickException(f"Unknown configuration value: {name}")
         return self.values[name]
@@ -138,10 +141,20 @@ class ResourceCommand:
     @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
                   help="Type of resource to manage")
     def __init__(self, resource_type="server"):
+        # The signature carries the default so help output and runtime behavior stay in sync.
         self.resource_type = resource_type
 
         # Access shared data from parent command
         self.profile = click.ctx.meta["profile"]
+
+    def __run__(self):
+        """Show the summary when no resource subcommand is selected."""
+        return (
+            f"Resource Management Summary:\n"
+            f"• Current Resource Type: {self.resource_type}\n"
+            f"• Available Types: server, database, storage\n"
+            f"• Active Profile: {self.profile}"
+        )
 
     @click.command()
     @click.argument("name")
@@ -149,9 +162,10 @@ class ResourceCommand:
     @click.option("--region", help="Deployment region (defaults to config region)")
     def create(self, name, size="medium", region=None):
         """Create a new resource."""
-        # Initialize config only when its default region is needed.
+        # Resolve the default through config, initializing that group only when needed.
         if region is None:
             region = ctx.invoke("config.get", name="region")
+        # Command defaults live on the method signature for the same reason as group defaults above.
         # Use the profile from instance state instead of context
         return (
             f"Creating {self.resource_type} '{name}'\n"
@@ -193,6 +207,7 @@ class MainApp:
                  help="Environment to run in")
     @click.version_option(version="1.0")
     def __init__(self, verbose, profile="default", env="development"):
+        # The signature is the preferred place for option defaults in UltraClick examples.
         # Store options as instance variables
         self.verbose = verbose
         self.profile = profile
@@ -223,6 +238,12 @@ class MainApp:
     # 'info' is an alias for the 'status' command
     info=click.alias(status)
 
+    @click.command()
+    def testraise(self):
+        click.output.headline(f'Testing Exceptions')
+        raise Exception(f'Testing Exceptions')
+
+
 if __name__ == "__main__":
     MainApp()
 ```
@@ -250,13 +271,17 @@ Region: us-east
 Using profile: production
 ```
 
-## Help Output
+## Output
+
+Plain text output (no colors, no utf8 chars and no frames/borders) is selected automatically when stdout/stderr are not a TTY,
+when `TERM=dumb`, or when `NO_COLOR` is present. This is helpful for AI agents or when redirecting output to a text file. You
+can also set `ULTRACLICK_PLAIN=1` to force plain text output even in an interactive terminal.
+
+Set `ULTRACLICK_COLORS=1` to force color output despite other settings.
+
+### Help Output
 
 **ultraclick** leverages RichClick to produce beautiful help screens automatically.
-
-Plain text output is selected automatically when stdout or stderr is not a TTY, when `TERM=dumb`, or when `NO_COLOR`
-is present. Set `ULTRACLICK_PLAIN=1` to force plain Click-style output even in an interactive terminal. Set
-`ULTRACLICK_COLORS=1` to force Rich output and override plain-mode detection, including `ULTRACLICK_PLAIN`.
 
 Option defaults are shown in help output when an option has a default value, whether that default was declared in the
 decorator or inferred from the Python signature. If you need different behavior, pass Click's `show_default=...`
@@ -266,7 +291,7 @@ The preferred UltraClick style is to put defaults on the Python function signatu
 focused on option names, types, and help text. Decorator defaults still work, but signature defaults keep the Python
 call shape and CLI help output driven by the same source.
 
-### Main Help
+
 ```
  Usage: demo [OPTIONS] [COMMAND] [ARGS]...
                                                                                 
@@ -302,18 +327,19 @@ In ultraclick, the optional methods `__init__` and `__run__` serve different rol
  * If `__run__` is absent, the group shows help instead.
 
 ```python
-@click.main_group(name="simple")
-class SimpleApp:
-    @click.option("--profile")
-    def __init__(self, profile):
-        self.profile = profile
+import ultraclick as click
 
+class SimpleApp():
     def __run__(self):
-        return f"Running with profile {self.profile}"
+        click.output.success('Success')
+
+if __name__ == "__main__":
+   click.group_from_class(SimpleApp)()
 ```
 
 ### Context Proxy (`click.ctx`)
-**ultraclick** provides a `click.ctx` proxy that forwards attributes to `click.get_current_context()`. This allows you to access context data globally without passing it as a parameter.
+
+**ultraclick** provides easy access to Click’s context via `click.ctx`.
 
 ```python
 # Store global state in the main group
@@ -321,7 +347,11 @@ click.ctx.meta["db_client"] = Database()
 
 # Access it in any subcommand
 db = click.ctx.meta["db_client"]
-current_cmd = click.ctx.invoked_subcommand
+
+# Warning: Click exposes different types here:
+# invoked_subcommand is a string or None, while command is a Click command object.
+current_subcmd = click.ctx.invoked_subcommand
+current_cmd = click.ctx.command
 ```
 
 Invoke another command by its registered path from the root group:
@@ -366,9 +396,8 @@ Plain mode and Windows use a pipe. Both paths combine stdout and stderr in `resu
 `silent=True` or `suppress=True` disables output streaming to the screen but still captures the output.
 JSON parsing captures stdout separately from stderr and waits for completion, so warnings do not corrupt the JSON.
 
-When plain mode is active, UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
-downstream tools produce plain output too. Output is forwarded without waiting for a newline, but the child must
-flush its own output before UltraClick can read it.
+When text plain mode is active, UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
+those may produce plain text output too. Output is forwarded without waiting for a newline.
 
 ## Tips
 
@@ -391,33 +420,6 @@ _DEMO_PY_COMPLETE=fish_source ./demo.py
 
 The variable name is `_<COMMAND>_COMPLETE`, with the command name uppercased and dashes or dots changed to underscores.
 For a command named `my-tool`, use `_MY_TOOL_COMPLETE`.
-
-## Development
-
-### Setup
-1.  Clone the repository.
-2.  Install dependencies: `pip install -e .`
-
-### Testing
-See [AGENTS.md — Tests](./AGENTS.md#tests) for the test command and coverage guidelines.
-
-### Release
-Releases are tag-driven through the GitHub Actions release workflow.
-
-The workflow runs only when a Git tag matching `v*` is pushed.
-
-1.  Bump the package version in `pyproject.toml`.
-2.  Commit and push that change to `main`.
-3.  Create a matching tag such as `v0.2.4`.
-4.  Push the tag.
-5.  Verify the GitHub Actions `Release` workflow run and wait for it to finish.
-
-```bash
-git tag v0.2.4
-git push origin v0.2.4
-gh run list -L 10
-gh run watch <run-id> --exit-status
-```
 
 ## License
 
