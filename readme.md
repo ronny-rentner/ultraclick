@@ -7,15 +7,11 @@
 
 **ultraclick** is a powerful, class-based wrapper around the popular [Click](https://click.palletsprojects.com/) library and [RichClick](https://github.com/ewels/rich-click). It empowers developers to build complex, structured, and beautiful Command Line Interfaces (CLIs) using modern Python object-oriented patterns.
 
-Say goodbye to massive files filled with decorated functions. **ultraclick** lets you organize your CLI commands into clean classes, share state naturally via instance attributes, and enjoy beautiful output formatting out of the box.
-
 ## Features
 
 - **Class-Based CLI Architecture**: Define your command-line interface using clean Python classes.
-- **Full Compatibility**: 100% compatible with all **Click** and **RichClick** features, decorators, and parameter types.
-- **Natural State Management**: Share context (config, API clients, flags) between commands naturally via `self` and class instance attributes.
-- **Smart Parameter Handling**: Robust handling of global and local command-line options and arguments, even when interspersed.
-- **Context Proxy**: Convenient access to Click’s context through `click.ctx` or a directly imported `ctx`.
+- **Full Compatibility**: Compatible with all **Click** and **RichClick** features, decorators, and parameter types.
+- **Natural State Management**: Share context between commands naturally via `self` and class instance attributes.
 - **Deeply Nested Groups**: Create hierarchical command structures (e.g., `app resource create`) by simply nesting classes.
 - **Rich Integration**: Beautiful, colorful terminal output and enhanced help text formatting out of the box.
 - **Command Aliases & Abbreviations**: Support for command aliases (`status` -> `info`) and partial command matching (`conf sh` -> `config show`).
@@ -27,7 +23,6 @@ Say goodbye to massive files filled with decorated functions. **ultraclick** let
 - [Quick Start](#quick-start)
 - [Help Output](#help-output)
 - [Advanced Usage](#advanced-usage)
-- [Tips](#tips)
 - [Development](#development)
 
 ## Installation
@@ -55,7 +50,7 @@ pip install -e .
 
 ## Quick Start
 
-Here is a complete, runnable example demonstrating how to build a structured CLI with global options, nested commands, and aliases. This code corresponds to the included `demo.py`.
+The included `demo.py` is a larger example demonstrating global options, nested commands, and aliases.
 
 ```python
 """
@@ -228,11 +223,16 @@ class MainApp:
 
         click.output.headline(f'Demo Status')
 
+        # Capture the interpreter version for the report; --verbose also shows the subprocess execution.
+        runtime = click.output.run_command([sys.executable, "--version"],
+                                           headline="Checking Python version", silent=not self.verbose)
+
         return (
             f"Status: Running\n"
             f"Environment: {self.env}\n"
             f"Verbose: {self.verbose}\n"
-            f"Profile: {self.profile}"
+            f"Profile: {self.profile}\n"
+            f"Runtime: {runtime.stdout.strip()}"
         )
 
     # 'info' is an alias for the 'status' command
@@ -251,14 +251,14 @@ if __name__ == "__main__":
 ### Running the Example
 
 ```console
-$ python demo.py --verbose status
-Verbose mode enabled in development environment
+$ python demo.py status
 
 → Demo Status
 Status: Running
 Environment: development
-Verbose: True
+Verbose: False
 Profile: default
+Runtime: Python 3.13.5
 
 $ python demo.py config show
 Active Profile: default
@@ -271,117 +271,107 @@ Region: us-east
 Using profile: production
 ```
 
-## Output
-
-Plain text output (no colors, no utf8 chars and no frames/borders) is selected automatically when stdout/stderr are not a TTY,
-when `TERM=dumb`, or when `NO_COLOR` is present. This is helpful for AI agents or when redirecting output to a text file. You
-can also set `ULTRACLICK_PLAIN=1` to force plain text output even in an interactive terminal.
-
-Set `ULTRACLICK_COLORS=1` to force color output despite other settings.
-
-### Help Output
+## Help Output
 
 **ultraclick** leverages RichClick to produce beautiful help screens automatically.
 
-Option defaults are shown in help output when an option has a default value, whether that default was declared in the
-decorator or inferred from the Python signature. If you need different behavior, pass Click's `show_default=...`
-explicitly on that option.
-
-The preferred UltraClick style is to put defaults on the Python function signature and keep `@click.option(...)`
-focused on option names, types, and help text. Decorator defaults still work, but signature defaults keep the Python
-call shape and CLI help output driven by the same source.
-
-
+### Main Help
 ```
- Usage: demo [OPTIONS] [COMMAND] [ARGS]...
-                                                                                
- Main demo application showcasing ultraclick's features.                        
-                                                                                
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --verbose                                    Enable verbose output           │
-│ --profile  TEXT                              Configuration profile to use    │
-│                                               [default: default]            │
-│ --env      [development|staging|production]  Environment to run in          │
-│                                               [default: development]        │
-│ --version                                    Show the version and exit.      │
-│ --help                                       Show this message and exit.     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ config      Configuration commands for the application. Demonstrates context │
-│             sharing between subcommands.                                     │
-│ resource    Resource management commands. Demonstrates parameter handling and │
-│             nested command structure.                                        │
-│ status      Show application status.                                         │
-╰──────────────────────────────────────────────────────────────────────────────╯
+$ python demo.py
+
+ Usage: demo.py [OPTIONS] [COMMAND] [ARGS]...
+
+ Main demo application showcasing ultraclick's features.
+
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --verbose                                    Enable verbose output                                                   │
+│ --profile  TEXT                              Configuration profile to use [default: default]                         │
+│ --env      [development|staging|production]  Environment to run in [default: development]                            │
+│ --version                                    Show the version and exit.                                              │
+│ --help                                       Show this message and exit.                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ config      Configuration commands for the application. Demonstrates context sharing between subcommands.            │
+│ resource    Resource management commands. Demonstrates parameter handling and nested command structure.              │
+│ status      Show application status.                                                                                 │
+│ testraise                                                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Usage
-
-Some ultraclick usage patterns.
-
-### Group Initialization And Default Actions
-
-In ultraclick, the optional methods `__init__` and `__run__` serve different roles:
- * `__init__` receives options and does setup steps. 
- * `__run__` is called only when no subcommand is provided.
- * If `__run__` is absent, the group shows help instead.
-
-```python
-import ultraclick as click
-
-class SimpleApp():
-    def __run__(self):
-        click.output.success('Success')
-
-if __name__ == "__main__":
-   click.group_from_class(SimpleApp)()
-```
+## Advanced Usage
 
 ### Context Proxy (`click.ctx`)
 
-**ultraclick** provides easy access to Click’s context via `click.ctx`.
+**ultraclick** provides easy access to the Click context via `click.ctx`. Import `ctx` directly when you prefer the
+shorter name:
 
 ```python
-# Store global state in the main group
-click.ctx.meta["db_client"] = Database()
-
-# Access it in any subcommand
-db = click.ctx.meta["db_client"]
-
-# Warning: Click exposes different types here:
-# invoked_subcommand is a string or None, while command is a Click command object.
-current_subcmd = click.ctx.invoked_subcommand
-current_cmd = click.ctx.command
-```
-
-Invoke another command by its registered path from the root group:
-
-```python
+import ultraclick as click
 from ultraclick import ctx
 
+# Store global state in the main group
+click.ctx.meta["profile"] = profile
+
+# Access shared state in another command
+profile = click.ctx.meta["profile"]
+
+# Access the Click command object
+current_cmd = click.ctx.command
+
+# Click exposes different types here:
+# command is a Click command object; invoked_subcommand is a string or None.
+current_subcmd = click.ctx.invoked_subcommand
+
+# Invoke another command by its registered path and use its return value.
 region = ctx.invoke("config.get", name="region")
 ```
 
-Missing owning groups are initialized through normal option parsing; required group options still cause an error
-when unavailable. Initialized groups reuse their existing instances and state. The call returns the command's value
-without automatically printing it, following Click's `Context.invoke()` behavior. Command objects remain accepted.
+`ctx.invoke("config.get", name="region")` starts at the root command group, initializes missing command groups through
+normal option parsing, and returns the invoked command's value.
 
 ### Output Formatter (`click.output`)
-Access styled output methods directly:
-- `click.output.success(msg)`
-- `click.output.error(msg)`
-- `click.output.warning(msg)`
-- `click.output.info(msg)`
-- `click.output.headline(msg)`
 
-#### Running Shell Commands
-Ultraclick streams command output as it arrives and captures it while waiting for the command to finish:
+`click.output` gives commands a small set of terminal-friendly messages for status lines, section headlines, warnings,
+and errors. Use it for output that belongs around the command result, while the command's return value remains the main
+result shown at the end.
+
+```python
+@click.command()
+def status(self):
+    """Show application status."""
+    click.output.headline("Demo Status")
+    return (
+        f"Status: Running\n"
+        f"Environment: {self.env}\n"
+        f"Profile: {self.profile}"
+    )
+```
+
+The formatter is available as `click.output`:
+
+- `click.output.headline(msg)`
+- `click.output.info(msg)`
+- `click.output.success(msg)`
+- `click.output.warning(msg)`
+- `click.output.error(msg)`
+
+UltraClick chooses the output style from the caller's terminal. In an interactive terminal, formatter methods use the
+formatted, colorized terminal view. When stdout or stderr is not a TTY, when `TERM=dumb`, or when `NO_COLOR` is present,
+UltraClick switches to plain text output so agents, scripts, and redirected commands receive simple text.
+
+`ULTRACLICK_PLAIN=1` forces plain text output. `ULTRACLICK_COLORS=1` forces color output.
+
+### Running Shell Commands
+
+Many CLIs are wrappers around existing tools such as `git`, `docker`, or `kubectl`. `click.output.run_command(...)` gives
+those subprocesses the same output behavior as the rest of the CLI: the command is shown, output streams while the command
+runs, and the completed result is still available to Python code.
 
 ```python
 # Simple command execution
 click.output.run_command("ls -la")
 
-# Run and capture output
+# Capture output without streaming it to the screen
 result = click.output.run_command("git status", silent=True)
 if result.returncode == 0:
     print(result.stdout)
@@ -391,35 +381,26 @@ data = click.output.run_command_and_parse_json("kubectl get pods -o json")
 print(f"Found {len(data['items'])} pods")
 ```
 
-Command output streams through a PTY on Unix outside plain mode, preserving terminal colors and behavior.
-Plain mode and Windows use a pipe. Both paths combine stdout and stderr in `result.stdout`; `result.stderr` is empty.
-`silent=True` or `suppress=True` disables output streaming to the screen but still captures the output.
-JSON parsing captures stdout separately from stderr and waits for completion, so warnings do not corrupt the JSON.
+Use `suppress=True` to hide child output while still showing the command that is running. Use `silent=True` to make it
+completely silent. Both options still capture the output.
 
-When text plain mode is active, UltraClick also passes `TERM=dumb`, `NO_COLOR=1`, and `CLICOLOR=0` to child commands so
-those may produce plain text output too. Output is forwarded without waiting for a newline.
+For normal command runs, stdout and stderr are combined in `result.stdout`; `result.stderr` is empty. JSON parsing keeps
+stdout separate from stderr before parsing so warnings do not corrupt the JSON data.
 
-## Tips
+## Development
 
-### Flexible Parameter Ordering
-By default, **ultraclick** allows global options to be placed after subcommands (e.g., `./demo.py status --verbose`). It includes robust logic to ensure `--help` flags are correctly routed to the target command even when deep in the hierarchy.
+### Setup
 
-### Defaults In Help
-By default, option help shows the effective default value. The preferred pattern is to put that default on the Python
-function signature, for example `def __init__(self, profile="default")`, and let UltraClick's `@click.option(...)`
-wrapper expose it in the CLI. Explicit decorator defaults still work when you need them.
+1.  Clone the repository.
+2.  Install dependencies: `pip install -e .`
 
-### Shell Completion
-Generate a shell completion script by setting the command's completion environment variable to `<shell>_source`.
+### Testing
+
+Run the included unit tests using the standard Python `unittest` module:
 
 ```bash
-_DEMO_PY_COMPLETE=bash_source ./demo.py
-_DEMO_PY_COMPLETE=zsh_source ./demo.py
-_DEMO_PY_COMPLETE=fish_source ./demo.py
+python -m unittest
 ```
-
-The variable name is `_<COMMAND>_COMPLETE`, with the command name uppercased and dashes or dots changed to underscores.
-For a command named `my-tool`, use `_MY_TOOL_COMPLETE`.
 
 ## License
 
