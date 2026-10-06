@@ -162,6 +162,13 @@ class MainApp:
         if verbose:
             click.output.success(f"Verbose mode enabled in {env} environment")
 
+    @click.command()
+    @click.argument("text")
+    @click.option("--preedit", is_flag=True, help="Enable preedit mode")
+    def type(self, text, preedit):
+        """Show the parsed text and preedit flag."""
+        return f"Text: {text}\nPreedit: {preedit}"
+
     @click.option("--test", is_flag=True, help="Test option")
     @click.command()
     def status(self, test):

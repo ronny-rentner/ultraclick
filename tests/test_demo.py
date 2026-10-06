@@ -51,6 +51,67 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("demo", result.stdout.lower())
         self.assertIn("version", result.stdout.lower())
     
+    def test_type_command(self):
+        for args, preedit in ((["type", "hello"], False), (["type", "--", "hello"], False),
+                              (["type", "hello", "--"], False), (["type", "--preedit", "hello"], True)):
+            with self.subTest(args=args):
+                result = self.run_command(args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"Text: hello\nPreedit: {preedit}\n")
+                self.assertEqual(result.stderr, "")
+
+    def test_type_literal_arguments_after_double_dash(self):
+        # Option names and additional '--' tokens must all remain literal operands.
+        for args in (["type", "--"], ["ty", "--"], ["--", "type"],
+                     ["--profile", "production", "type", "--"],
+                     ["type", "--profile", "production", "--"]):
+            for text in ("--preedit", "--help", "--profile", "--"):
+                with self.subTest(args=args, text=text):
+                    result = self.run_command(args + [text])
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, f"Text: {text}\nPreedit: False\n")
+                    self.assertEqual(result.stderr, "")
+
+    def test_separator_keeps_extra_operands(self):
+        # 'type' accepts one operand; treating '--preedit' as an option would hide the extra operand.
+        for args in (["type", "--", "--preedit", "hello"], ["--", "type", "--preedit", "hello"]):
+            with self.subTest(args=args):
+                result = self.run_command(args)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("Got unexpected extra argument (hello)", result.stderr)
+
+    def test_type_literal_arguments_with_preedit(self):
+        for text in ("--preedit", "--help", "--profile", "--"):
+            with self.subTest(text=text):
+                result = self.run_command(["type", "--preedit", "--", text])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"Text: {text}\nPreedit: True\n")
+                self.assertEqual(result.stderr, "")
+
+    def test_nested_literal_arguments_after_double_dash(self):
+        for args in (["resource", "list"], ["r", "l"]):
+            with self.subTest(args=args):
+                result = self.run_command(args + ["first", "--profile", "production", "--",
+                                                  "--help", "--profile", "--"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, (
+                    "Filtered server list: first, --help, --profile, -- (Profile: production)\n"
+                ))
+                self.assertEqual(result.stderr, "")
+
+    @unittest.expectedFailure
+    def test_double_dash_as_option_value(self):
+        # Consuming '--' as a value must not prevent parsing the following '--env' option.
+        for args, profile, config_dir in (
+                (["--profile", "--", "--env", "production", "config", "show"], "--", "./config"),
+                (["config", "--config-dir", "--", "show"], "default", "./--"),
+                (["conf", "show", "--config-dir", "--"], "default", "./--")):
+            with self.subTest(args=args):
+                result = self.run_command(args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, f"Active Profile: {profile}\nConfig Directory: {config_dir}\n")
+                self.assertEqual(result.stderr, "")
+
     def test_status_command(self):
         """Test the status command returns expected output"""
         result = self.run_command(["status"])

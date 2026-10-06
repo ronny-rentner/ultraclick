@@ -126,12 +126,6 @@ class ClickContextProxy:
         # Keep Click's normal invocation behavior and caller context.
         return current.invoke(callback, *args, **kwargs)
 
-    # TODO: This method crashes because click.Context is not callable.
-    #       Keeping it commented out for now to verify no downstream usage relies on it.
-    # def __call__(self, *args, **kwargs):
-    #     ctx = click.get_current_context()
-    #     return ctx(*args, **kwargs)
-
     def __repr__(self):
         ctx = click.get_current_context()
         return repr(ctx)
@@ -237,6 +231,11 @@ class RichGroup(click.RichGroup):
                 click.echo(self.get_help(ctx))
                 ctx.exit(0)
             raise
+        # POSIX requires arguments after '--' to be treated as positional arguments.
+        # Click incorrectly allows subcommands to parse arguments after '--' as options.
+        # Reinsert '--' before these arguments to stop option parsing in the subcommand.
+        if ctx.allow_interspersed_args and not ctx.resilient_parsing and args:
+            rv.insert(max(0, len(rv) - len(args)), '--')
         #output.info(f"AFT RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} ctx.meta={ctx.meta}")
         
         if self.source_class and self.instance_key and self.instance_key not in ctx.meta:

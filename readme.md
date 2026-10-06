@@ -23,6 +23,7 @@
 - [Quick Start](#quick-start)
 - [Help Output](#help-output)
 - [Advanced Usage](#advanced-usage)
+- [Known Issues](#known-issues)
 - [Development](#development)
 
 ## Installation
@@ -277,7 +278,7 @@ Using profile: production
 
 ### Main Help
 ```
-$ python demo.py
+$ ./demo.py
 
  Usage: demo.py [OPTIONS] [COMMAND] [ARGS]...
 
@@ -386,6 +387,11 @@ completely silent. Both options still capture the output.
 
 For normal command runs, stdout and stderr are combined in `result.stdout`; `result.stderr` is empty. JSON parsing keeps
 stdout separate from stderr before parsing so warnings do not corrupt the JSON data.
+
+## Known Issues
+
+`./demo.py conf show --config-dir --` fails because the parent parser consumes the final `--`.
+Workaround: append another `--`: `./demo.py conf show --config-dir -- --`.
 
 ## Development
 
