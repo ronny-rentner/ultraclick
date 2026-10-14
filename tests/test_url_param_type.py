@@ -11,6 +11,9 @@ def url_cli(url):
     return url
 
 
+url_cli = click.apply_decorators(url_cli)
+
+
 class TestURLParamType(unittest.TestCase):
     def test_accepts_absolute_http_url(self):
         result = CliRunner().invoke(url_cli, ["http://example.com/path"])

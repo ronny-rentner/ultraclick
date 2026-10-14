@@ -255,6 +255,11 @@ class RichGroup(click.RichGroup):
         source = self.source_class if instance is None else instance
         for attr_name in dir(source):
             attr = getattr(source, attr_name)
+            if getattr(attr, '__ultraclick_alias__', None):
+                continue
+            if getattr(attr, '__ultraclick_decorators__', None):
+                attr = apply_decorators(getattr(attr, '__func__', attr))
+                setattr(source, attr_name, attr)
             if isinstance(attr, click.Command):
                 # Avoid redundant adding
                 cmd_name = getattr(attr, 'name', attr_name)
@@ -264,7 +269,7 @@ class RichGroup(click.RichGroup):
                 # Wrap the command function with context
                 command_fn = attr.callback
                 #TODO: Is it an error if it's not callable?
-                if callable(command_fn):
+                if callable(command_fn) and not attr.alias:
                     wrapped_callback = wrap_command_with_context(command_fn, instance_key=self.instance_key)
                     attr.callback = wrapped_callback
 
@@ -286,6 +291,15 @@ class RichGroup(click.RichGroup):
                 if cmd_name not in self.commands:
                     nested_group = group_from_class(attr, name=cmd_name, parent_key=self.instance_key, **(self.group_kwargs or {}))
                     self.add_command(nested_group)
+
+        # Alias parameters come from the converted target command.
+        for attr_name in dir(source):
+            attr = getattr(source, attr_name)
+            target_name = getattr(attr, '__ultraclick_alias__', None)
+            if target_name:
+                attr = alias_command(attr_name, getattr(source, target_name))
+                setattr(source, attr_name, attr)
+                self.add_command(attr, name=attr_name)
 
     def get_help_option(self, ctx):
         help_options = self.get_help_option_names(ctx)
@@ -381,7 +395,7 @@ def alias_command(alias_name, target_command, alias_help=None):
     # Copy all parameters from the target command to the alias
     params = target_command.params
 
-    @click.command(name=alias_name, params=params, hidden=True, cls=RichCommand)
+    @click.command(name=alias_name, params=params, hidden=True, cls=RichCommand, alias=True)
     @click.pass_context
     def _alias(ctx, *args, **kwargs):
         return ctx.forward(target_command)
@@ -391,10 +405,9 @@ def alias_command(alias_name, target_command, alias_help=None):
     return _alias
 
 def alias(cmd):
-    @click.command(params=cmd.params, hidden=True, cls=RichCommand, alias=True)
-    @click.pass_context
     def _alias(self, *args, **kwargs):
-        return click.get_current_context().forward(cmd)
+        return cmd(self, *args, **kwargs)
+    _alias.__ultraclick_alias__ = cmd.__name__
     return _alias
 
 def deferred_help_callback(ctx, param, value):
@@ -423,6 +436,7 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         capture_logs: Whether to route Python logging through UltraClick output
         context_settings: Dict with context settings like 'meta', 'allow_interspersed_args', etc.
     """
+    apply_decorators(cls.__init__)
     if name is None:
         name = cls.__name__.lower()
     if help is None:
@@ -819,8 +833,7 @@ def option(*param_decls, **kwargs):
             if "show_default" not in kwargs:
                 kwargs["show_default"] = True
 
-        # Delegate to the original click.option
-        return click.option(*param_decls, **kwargs)(func)
+        return _record_decorator(func, click.option(*param_decls, **kwargs))
 
     return decorator
 
@@ -846,11 +859,27 @@ def argument(*param_decls, **kwargs):
             #if "show_default" not in kwargs:
             #    kwargs["show_default"] = True
 
-        return click.argument(*param_decls, **kwargs)(func)
+        return _record_decorator(func, click.argument(*param_decls, **kwargs))
 
     return decorator
 
-command = partial(click.command, cls=RichCommand)
+def _record_decorator(func, decorator):
+    func.__dict__.setdefault('__ultraclick_decorators__', []).append(decorator)
+    return func
+
+def apply_decorators(func):
+    """Consume pending Click decorators and return their CLI result."""
+    decorators = getattr(func, '__ultraclick_decorators__', [])
+    while decorators:
+        func = decorators.pop(0)(func)
+    return func
+
+def command(*args, **kwargs):
+    kwargs.setdefault('cls', RichCommand)
+    def decorator(func):
+        return _record_decorator(func, click.command(*args, **kwargs))
+    return decorator
+
 output = PlainOutputFormatter() if PLAIN_TEXT_MODE else OutputFormatter()
 
 # Short alias

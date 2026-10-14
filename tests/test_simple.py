@@ -14,6 +14,33 @@ SIMPLE_SCRIPT = os.path.join(PROJECT_ROOT, 'simple.py')
 
 
 class TestSimpleCLI(unittest.TestCase):
+    def test_method_supports_python_and_cli_calls(self):
+        class App:
+            @click.option('--prefix')
+            def __init__(self, prefix='default'):
+                self.prefix = prefix
+
+            @click.option('--upper', is_flag=True)
+            @click.command()
+            @click.argument('text')
+            def show(self, text, upper=False):
+                return self.prefix + ':' + (text.upper() if upper else text)
+
+            display = click.alias(show)
+
+        app = App('python')
+        self.assertEqual(app.show('hello'), 'python:hello')
+        self.assertEqual(app.display('hello', upper=True), 'python:HELLO')
+
+        for name in ('first', 'second'):
+            cli = click.group_from_class(App, name=name)
+            for command_name in ('show', 'display'):
+                with self.subTest(name=name, command=command_name):
+                    result = CliRunner().invoke(cli, ['--prefix', name, command_name, 'hello', '--upper'])
+                    self.assertEqual(result.exit_code, 0, result.exception)
+                    self.assertEqual(result.stdout, name + ':HELLO\n')
+                    self.assertEqual(result.stderr, '')
+
     def test_commands_discovered_on_constructed_instance(self):
         class DynamicApp:
             @click.option('--value')
