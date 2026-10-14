@@ -14,6 +14,27 @@ SIMPLE_SCRIPT = os.path.join(PROJECT_ROOT, 'simple.py')
 
 
 class TestSimpleCLI(unittest.TestCase):
+    def test_commands_discovered_on_constructed_instance(self):
+        class DynamicApp:
+            @click.option('--value')
+            def __init__(self, value='default'):
+                self.value = value
+
+                @click.command()
+                def show(self):
+                    return self.value
+
+                self.show = show
+
+        cli = click.group_from_class(DynamicApp)
+        for args, expected in ((['--value', 'first', 'show'], 'first'),
+                               (['sh', '--value', 'second'], 'second')):
+            with self.subTest(args=args):
+                result = CliRunner().invoke(cli, args)
+                self.assertEqual(result.exit_code, 0, result.exception)
+                self.assertEqual(result.stdout, expected + '\n')
+                self.assertEqual(result.stderr, '')
+
     def run_command(self, args):
         return subprocess.run(
             [sys.executable, SIMPLE_SCRIPT] + args,

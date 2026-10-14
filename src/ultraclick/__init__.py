@@ -242,18 +242,19 @@ class RichGroup(click.RichGroup):
             # Instantiate the class with parsed options
             instance = self.source_class(**ctx.params)
             ctx.meta[self.instance_key] = instance
-            self._discover()
+            self._discover(instance)
             
         return rv
 
-    def _discover(self):
+    def _discover(self, instance=None):
         #output.info(f"RichGroup._discover(group={self.name}, source_class={self.source_class} context_settings={self.context_settings})")
         if not self.source_class:
             return
 
         # Add commands dynamically
-        for attr_name in dir(self.source_class):
-            attr = getattr(self.source_class, attr_name)
+        source = self.source_class if instance is None else instance
+        for attr_name in dir(source):
+            attr = getattr(source, attr_name)
             if isinstance(attr, click.Command):
                 # Avoid redundant adding
                 cmd_name = getattr(attr, 'name', attr_name)
