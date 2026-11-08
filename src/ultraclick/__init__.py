@@ -1,3 +1,4 @@
+import contextlib
 import errno
 import inspect
 import json
@@ -524,7 +525,7 @@ class OutputFormatter:
 
         self.console = rich.console.Console(highlight=False, file=sys.stderr, force_terminal=FORCE_COLORS or None)
         self._original_console_file = self.console.file
-        self._silenced = False
+        self._silence_depth = 0
         self.shell = self._find_shell()
 
     def _find_shell(self):
@@ -585,22 +586,27 @@ class OutputFormatter:
         # Print without newline for user input
         self.console.print(message, end='')
 
-    def silence(self):
+    def silence(self, condition=True):
         """
         Context manager to temporarily silence the console output.
+        A false `condition` leaves the output visible.
         """
+        if not condition:
+            return contextlib.nullcontext()
+
         class SilenceContext:
             def __init__(inner_self, formatter):
                 inner_self.formatter = formatter
 
+            # Only the outermost silence swaps the console file, so inner blocks cannot end it early.
             def __enter__(inner_self):
-                if not self._silenced:
-                    self._silenced = True
+                if not self._silence_depth:
                     self.console.file = open(os.devnull, "w")
+                self._silence_depth += 1
 
             def __exit__(inner_self, exc_type, exc_value, traceback):
-                if self._silenced:
-                    self._silenced = False
+                self._silence_depth -= 1
+                if not self._silence_depth:
                     self.console.file.close()
                     self.console.file = self._original_console_file
 
@@ -776,7 +782,7 @@ class PlainOutputFormatter(OutputFormatter):
         # Plain mode must not touch Rich imports, so it initializes its own console directly.
         self.console = PlainTextConsole(sys.stderr)
         self._original_console_file = self.console.file
-        self._silenced = False
+        self._silence_depth = 0
         self.shell = self._find_shell()
 
     def title(self, title, project_name):

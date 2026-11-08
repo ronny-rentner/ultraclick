@@ -356,6 +356,13 @@ The formatter is available as `click.output`:
 - `click.output.warning(msg)`
 - `click.output.error(msg)`
 
+`click.output.silence()` hides formatter messages inside a `with` block. Pass a condition to silence only when it is true:
+
+```python
+with click.output.silence(not verbose):
+    click.output.info("Loading configuration")
+```
+
 UltraClick chooses the output style from the caller's terminal. In an interactive terminal, formatter methods use the
 formatted, colorized terminal view. When stdout or stderr is not a TTY, when `TERM=dumb`, or when `NO_COLOR` is present,
 UltraClick switches to plain text output so agents, scripts, and redirected commands receive simple text.

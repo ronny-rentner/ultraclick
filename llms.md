@@ -30,6 +30,8 @@
 - Use `click.output.*(...)` only when styled terminal output is required.
 - Use `click.output.run_command(...)` for external commands so UltraClick handles command echoing and output capture.
 - `click.output.run_command(...)` streams output while waiting for the child process to finish; it is not a background-job API. See [Running Shell Commands](./readme.md#running-shell-commands) for capture, suppression, and JSON behavior.
+- `click.output.silence(condition=True)` hides `click.output` messages only, not child process output or `click.echo(...)`.
+- Write `click.output.silence(not verbose)`, not a `nullcontext()` switch.
 
 ## `__init__` And `__run__`
 
