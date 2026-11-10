@@ -7,7 +7,7 @@
 - `tests/` contains the test suite.
 - `pyproject.toml` defines package metadata and dependencies.
 
-Read [readme.md](./readme.md) for library usage and [llms.md](./llms.md) for detailed behavior.
+Read [llms.md](./llms.md) for the library's behavior.
 
 ## Python Environment
 
@@ -57,3 +57,14 @@ Explain UltraClick's behavior directly. Preserve established README wording when
 ## Commits and Pull Requests
 
 Use short, capitalized, imperative commit titles. In pull requests, explain the user-visible change and report the tests run. Include output examples when command output or help text changes.
+
+## Releases
+
+Pushing a `v<version>` tag publishes the package to PyPI through the `Release` workflow.
+
+1. Set `version` in `pyproject.toml` to the release version, for example `0.2.8`, and commit. The pre-commit hook bumps only `.devN` versions and leaves a release version alone.
+2. Push and wait until the `Tests` workflow passes.
+3. Tag that commit and push the tag: `git tag v0.2.8 && git push origin v0.2.8`.
+4. Check the `Release` run: `gh run list --workflow Release`.
+
+The version stays at the release version afterwards. Moving to a dev version such as `0.2.9.dev0` is a maintainer decision.
