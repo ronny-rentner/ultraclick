@@ -13,6 +13,7 @@ This demo systematically showcases ultraclick's main features:
 
 import pathlib
 import sys
+import enum
 
 import ultraclick as click
 from ultraclick import ctx
@@ -190,6 +191,16 @@ class MainApp:
 
     # 'info' is an alias for the 'status' command
     info=click.alias(status)
+
+    @click.command()
+    def error(self):
+        """Test error message design"""
+        click.output.error('Test error message [draft]')
+
+    @click.command()
+    def ask(self):
+        """Run a child command that reads a line from the keyboard."""
+        click.output.run_command([sys.executable, "-c", 'print("Hello", input("Name: "))'])
 
     @click.command()
     def testraise(self):

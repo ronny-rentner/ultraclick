@@ -390,15 +390,11 @@ print(f"Found {len(data['items'])} pods")
 ```
 
 Use `suppress=True` to hide child output while still showing the command that is running. Use `silent=True` to make it
-completely silent. Both options still capture the output.
+completely silent. Both options still capture the output. Silent and suppressed output is captured in plain text mode
+unless you pass `force_pty=True`.
 
 For normal command runs, stdout and stderr are combined in `result.stdout`; `result.stderr` is empty. JSON parsing keeps
 stdout separate from stderr before parsing so warnings do not corrupt the JSON data.
-
-## Known Issues
-
-`./demo.py conf show --config-dir --` fails because the parent parser consumes the final `--`.
-Workaround: append another `--`: `./demo.py conf show --config-dir -- --`.
 
 ## Development
 

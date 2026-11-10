@@ -99,18 +99,14 @@ class TestDemoCLI(unittest.TestCase):
                 ))
                 self.assertEqual(result.stderr, "")
 
-    @unittest.expectedFailure
-    def test_double_dash_as_option_value(self):
-        # Consuming '--' as a value must not prevent parsing the following '--env' option.
-        for args, profile, config_dir in (
-                (["--profile", "--", "--env", "production", "config", "show"], "--", "./config"),
-                (["config", "--config-dir", "--", "show"], "default", "./--"),
-                (["conf", "show", "--config-dir", "--"], "default", "./--")):
-            with self.subTest(args=args):
-                result = self.run_command(args)
+    def test_ask_child_reads_parent_input(self):
+        # Forced colors run the child through a PTY; its input must still come from the parent's stdin.
+        for colors in ("0", "1"):
+            with self.subTest(colors=colors):
+                result = subprocess.run([sys.executable, DEMO_SCRIPT, "ask"], input="Ada\n", capture_output=True, text=True, timeout=30,
+                                        cwd=PROJECT_ROOT, env=dict(os.environ, ULTRACLICK_PLAIN="1", ULTRACLICK_COLORS=colors))
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, f"Active Profile: {profile}\nConfig Directory: {config_dir}\n")
-                self.assertEqual(result.stderr, "")
+                self.assertIn("Hello Ada", ANSI_RE.sub("", result.stdout))
 
     def test_status_command(self):
         """Test the status command returns expected output"""

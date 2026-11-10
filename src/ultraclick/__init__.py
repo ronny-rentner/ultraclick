@@ -28,6 +28,7 @@ PLAIN_TEXT_MODE = not FORCE_COLORS and (
 
 import rich
 import rich.console
+import rich.markup
 import rich.panel
 import rich_click as click
 
@@ -96,10 +97,6 @@ class ClickContextProxy:
     def __getattr__(self, attr):
         ctx = click.get_current_context()
         return getattr(ctx, attr)
-
-    def __getitem__(self, key):
-        ctx = click.get_current_context()
-        return ctx[key]
 
     def invoke(self, callback, /, *args, **kwargs):
         """Invoke a command object or a root-relative command path."""
@@ -256,9 +253,14 @@ class RichGroup(click.RichGroup):
         source = self.source_class if instance is None else instance
         for attr_name in dir(source):
             attr = getattr(source, attr_name)
+            if isinstance(attr, click.Command) and attr.name in self.commands:
+                continue
+            # A command built by a base class's group carries that group's instance key; rebuild from the plain function.
+            attr = getattr(attr, '__ultraclick_function__', attr)
             if getattr(attr, '__ultraclick_alias__', None):
                 continue
             if getattr(attr, '__ultraclick_decorators__', None):
+                # The command stored on the class below marks the decorators as applied for this class only.
                 attr = apply_decorators(getattr(attr, '__func__', attr))
                 setattr(source, attr_name, attr)
             if isinstance(attr, click.Command):
@@ -296,11 +298,15 @@ class RichGroup(click.RichGroup):
         # Alias parameters come from the converted target command.
         for attr_name in dir(source):
             attr = getattr(source, attr_name)
+            if isinstance(attr, click.Command) and attr.name in self.commands:
+                continue
+            attr = getattr(attr, '__ultraclick_function__', attr)
             target_name = getattr(attr, '__ultraclick_alias__', None)
             if target_name:
-                attr = alias_command(attr_name, getattr(source, target_name))
-                setattr(source, attr_name, attr)
-                self.add_command(attr, name=attr_name)
+                alias = alias_command(attr_name, getattr(source, target_name))
+                alias.__ultraclick_function__ = attr
+                setattr(source, attr_name, alias)
+                self.add_command(alias, name=attr_name)
 
     def get_help_option(self, ctx):
         help_options = self.get_help_option_names(ctx)
@@ -438,6 +444,9 @@ def group_from_class(cls, name=None, help=None, parent_key=None, initial_ctx_met
         context_settings: Dict with context settings like 'meta', 'allow_interspersed_args', etc.
     """
     apply_decorators(cls.__init__)
+    # Option decorators add their parameters to __init__ itself; removing the record keeps classes sharing it from adding them twice.
+    if hasattr(cls.__init__, '__ultraclick_decorators__'):
+        del cls.__init__.__ultraclick_decorators__
     if name is None:
         name = cls.__name__.lower()
     if help is None:
@@ -538,12 +547,16 @@ class OutputFormatter:
                 return s
         return '/bin/sh'
 
+    def escape_markup(self, text):
+        """Escape Rich markup in any value, such as an exception, so its text prints literally."""
+        return rich.markup.escape(str(text))
+
     def title(self, title, project_name):
-        self.console.print(f"{title}: [bold magenta]{project_name}[/bold magenta]")
+        self.console.print(f"{self.escape_markup(title)}: [bold magenta]{self.escape_markup(project_name)}[/bold magenta]")
 
     def main_operation(self, operation_name):
         panel = rich.panel.Panel(
-            f"{operation_name}",
+            self.escape_markup(operation_name),
             style="bold white",
             border_style="blue",
             box=rich.box.HEAVY,
@@ -565,16 +578,16 @@ class OutputFormatter:
         self.console.print(f"{cmd}", markup=False)
 
     def error(self, message):
-        self.console.print(f"[bold red]✖[/bold red] {message}")
+        self.console.print(f"[bold red]✖[/bold red] {self.escape_markup(message)}")
 
     def warning(self, message):
-        self.console.print(f"[bold yellow]✖[/bold yellow] {message}")
+        self.console.print(f"[bold yellow]✖[/bold yellow] {self.escape_markup(message)}")
 
     def success(self, message):
-        self.console.print(f"[bold green]{message}[/bold green]")
+        self.console.print(f"[bold green]{self.escape_markup(message)}[/bold green]")
 
     def failure(self, message):
-        self.console.print(f"[bold red]✖[/bold red] {message}")
+        self.console.print(f"[bold red]✖[/bold red] {self.escape_markup(message)}")
 
     def info(self, message):
         self.console.print(message)
@@ -612,10 +625,11 @@ class OutputFormatter:
 
         return SilenceContext(self)
 
-    def run_command(self, command, headline=None, suppress=False, error_handling=True, parse_json=False, silent=False):
+    def run_command(self, command, headline=None, suppress=False, error_handling=True, parse_json=False, silent=False, force_pty=False):
         """
         Run a shell command and capture its output, optionally streaming it.
         Simulate a TTY to preserve colored output and interactive behaviors on Unix systems.
+        Silent and suppressed output is captured in plain text mode unless force_pty is set.
         Use a simpler approach on Windows.
         """
         # Accept argv-style input so callers can describe command boundaries directly and let
@@ -640,11 +654,13 @@ class OutputFormatter:
             suppress = True
             error_handling = False
 
+        plain_text = PLAIN_TEXT_MODE or (suppress and not force_pty)
+
         # Prepare the environment with color support
         env = os.environ.copy()
         env['LINES'] = str(self.lines)
         env['COLUMNS'] = str(self.columns)
-        if PLAIN_TEXT_MODE:
+        if plain_text:
             # Plain mode should propagate the same terminal expectations to child processes.
             env['TERM'] = 'dumb'
             env['NO_COLOR'] = '1'
@@ -677,83 +693,71 @@ class OutputFormatter:
                 return {}
 
         # Plain output avoids terminal emulation; Windows has no Unix PTY implementation.
-        use_pty = not PLAIN_TEXT_MODE and os.name != 'nt'
+        use_pty = not plain_text and os.name != 'nt'
         stdout_bytes = bytearray()
 
+        # Pipe and PTY descriptors share the same streaming and capture loop.
+        master_fd, slave_fd = pty.openpty() if use_pty else os.pipe()
+
+        # Start the subprocess
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            executable=self.shell,
+            stdin=None,  # The child reads the keyboard directly; only its output goes through the pipe or PTY.
+            stdout=slave_fd,
+            stderr=slave_fd,
+            text=False,  # Disable text mode; we will decode bytes manually
+            env=env
+        )
+
+        # Close the slave descriptor in the parent
+        os.close(slave_fd)
+
+        # The terminal sends Ctrl-C to the child as well; the parent waits after the first one and gives up on the second.
+        def interrupt_on_next_ctrl_c(signum, frame):
+            signal.signal(signal.SIGINT, signal.default_int_handler)
+
+        previous_handler = signal.signal(signal.SIGINT, interrupt_on_next_ctrl_c)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        buffer = bytearray()
+
+        # Read available bytes without waiting for a newline, from either descriptor type.
         try:
-            # Pipe and PTY descriptors share the same streaming and capture loop.
-            master_fd, slave_fd = pty.openpty() if use_pty else os.pipe()
-
-            # Start the subprocess
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                executable=self.shell,
-                stdin=slave_fd if use_pty else None,  # A pipe carries output only; inherit stdin.
-                stdout=slave_fd,
-                stderr=slave_fd,
-                text=False,  # Disable text mode; we will decode bytes manually
-                env=env
-            )
-
-            # Close the slave descriptor in the parent
-            os.close(slave_fd)
-
-            # Register signal handler to forward `Ctrl-C`
-            def forward_signal(signum, frame):
-                if process.poll() is None:  # If the process is still running
-                    # Send Ctrl-C to the PTY instead of the process
-                    # This ensures the signal reaches the foreground process group
-                    os.write(master_fd, b'\x03')
-
-            # Only PTYs accept Ctrl-C bytes; pipe children retain normal signal delivery.
-            if use_pty:
-                signal.signal(signal.SIGINT, forward_signal)
-
-            decoder = codecs.getincrementaldecoder("utf-8")()
-            buffer = bytearray()
-
-            # Read available bytes without waiting for a newline, from either descriptor type.
-            try:
-                while True:
-                    chunk = os.read(master_fd, 1024)  # Read up to 1024 bytes
-                    if not chunk:
-                        break
-                    stdout_bytes.extend(chunk)
-                    text = decoder.decode(chunk)
-                    if not suppress:
-                        print(text, end="", flush=True)  # Agents also need the parent's pipe flushed.
-                        #print(chunk.decode("utf-8", errors="replace"), end="")  # Decode and print
-            except OSError as e:
-                if not use_pty or e.errno != errno.EIO:  # Only a PTY reports EOF as EIO.
-                    raise
-            finally:
+            while True:
+                chunk = os.read(master_fd, 1024)  # Read up to 1024 bytes
+                if not chunk:
+                    break
+                stdout_bytes.extend(chunk)
+                text = decoder.decode(chunk)
                 if not suppress:
-                    print(decoder.decode(b"", final=True), end="", flush=True)
-                os.close(master_fd)  # Ensure the fd is closed
+                    print(text, end="", flush=True)  # Agents also need the parent's pipe flushed.
+                    #print(chunk.decode("utf-8", errors="replace"), end="")  # Decode and print
+        except OSError as e:
+            if not use_pty or e.errno != errno.EIO:  # Only a PTY reports EOF as EIO.
+                raise
+        finally:
+            if not suppress:
+                print(decoder.decode(b"", final=True), end="", flush=True)
+            os.close(master_fd)  # Ensure the fd is closed
+            signal.signal(signal.SIGINT, previous_handler)
 
-            # Wait for the process to complete
-            process.wait()
+        # Wait for the process to complete
+        process.wait()
 
-            # Handle return code
-            if process.returncode != 0:
-                if not suppress and error_handling:
-                    self.failure(f"Command failed with return code {process.returncode}.")
-                if error_handling:
-                    sys.exit(process.returncode)
-
-            # Return result as a simple namespace for compatibility
-            return SimpleNamespace(
-                returncode=process.returncode,
-                stdout=stdout_bytes.decode("utf-8", errors="replace"),  # Decode captured output
-                stderr=""  # Both descriptor types combine stderr with stdout.
-            )
-
-        except subprocess.CalledProcessError as e:
-            self.error(f"Command failed with return code {e.returncode}.")
+        # Handle return code
+        if process.returncode != 0:
+            if not suppress and error_handling:
+                self.failure(f"Command failed with return code {process.returncode}.")
             if error_handling:
-                sys.exit(1)
-            return e
+                sys.exit(process.returncode)
+
+        # Return result as a simple namespace for compatibility
+        return SimpleNamespace(
+            returncode=process.returncode,
+            stdout=stdout_bytes.decode("utf-8", errors="replace"),  # Decode captured output
+            stderr=""  # Both descriptor types combine stderr with stdout.
+        )
 
     def run_command_and_print_output(self, command, headline=None, error_handling=True):
         return self.run_command(command, headline, suppress=False, error_handling=error_handling)
@@ -784,6 +788,10 @@ class PlainOutputFormatter(OutputFormatter):
         self._original_console_file = self.console.file
         self._silence_depth = 0
         self.shell = self._find_shell()
+
+    def escape_markup(self, text):
+        # Plain output never parses markup; escaping would print the backslashes.
+        return str(text)
 
     def title(self, title, project_name):
         self.console.print(f"{title}: {project_name}")
@@ -830,10 +838,9 @@ def option(*param_decls, **kwargs):
 
         # Retrieve the function's signature
         sig = inspect.signature(func)
-        param_name = param_decls[0].lstrip('-').replace('-', '_')  # Normalize parameter name
-
-        # Find the parameter in the signature and check for a default
-        param = sig.parameters.get(param_name)
+        # Click passes the value under one of the declared names, so the signature parameter matching one of them holds the default.
+        names = [decl.split('/')[0].lstrip('-').replace('-', '_').lower() for decl in param_decls]
+        param = next((sig.parameters[name] for name in names if name in sig.parameters), None)
         if param and param.default != inspect.Parameter.empty and "default" not in kwargs:
             kwargs["default"] = param.default
             if "show_default" not in kwargs:
@@ -853,7 +860,7 @@ def argument(*param_decls, **kwargs):
     """
     def decorator(func):
         sig = inspect.signature(func)
-        param_name = param_decls[0].lstrip('-').replace('-', '_')
+        param_name = param_decls[0].lstrip('-').replace('-', '_').lower()
 
         param = sig.parameters.get(param_name)
         if param and param.default != inspect.Parameter.empty:
@@ -874,11 +881,15 @@ def _record_decorator(func, decorator):
     return func
 
 def apply_decorators(func):
-    """Consume pending Click decorators and return their CLI result."""
+    """Apply recorded Click decorators and return their CLI result."""
     decorators = getattr(func, '__ultraclick_decorators__', [])
-    while decorators:
-        func = decorators.pop(0)(func)
-    return func
+    result = func
+    for decorator in decorators:
+        result = decorator(result)
+    if decorators:
+        # The group of an inheriting class rebuilds its own command from the plain function.
+        result.__ultraclick_function__ = func
+    return result
 
 def command(*args, **kwargs):
     kwargs.setdefault('cls', RichCommand)

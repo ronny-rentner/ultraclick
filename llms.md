@@ -49,7 +49,7 @@
 
 - `ULTRACLICK_PLAIN=1` forces plain output.
 - `ULTRACLICK_COLORS=1` forces Rich output and overrides plain-mode detection, including `ULTRACLICK_PLAIN`.
-- In plain mode, `click.output.run_command(...)` uses the non-PTY subprocess path and passes plain-output environment settings to child commands.
+- In plain mode, and for silent or suppressed calls without `force_pty=True`, `click.output.run_command(...)` uses the non-PTY subprocess path and passes plain-output environment settings to child commands.
 
 ## Shell Completion
 

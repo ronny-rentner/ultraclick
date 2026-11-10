@@ -86,6 +86,17 @@ class TestRunCommandPlain(unittest.TestCase):
         result = self.formatter.run_command(command, silent=True, parse_json=True)
         self.assertEqual(result, arguments)
 
+    def test_invalid_utf8_output_is_replaced(self):
+        # Latin-1 'café' is invalid UTF-8; streaming and capture both replace the bad byte instead of aborting.
+        command = [sys.executable, '-c', "import os; os.write(1, b'caf\\xe9\\n')"]
+        for kwargs, streamed in (({}, 'caf�\n'), ({'silent': True}, '')):
+            with self.subTest(kwargs=kwargs):
+                self.stdout.seek(0)
+                self.stdout.truncate()
+                result = self.formatter.run_command(command, **kwargs)
+                self.assertEqual(result.stdout, 'caf�\n')
+                self.assertEqual(self.stdout.getvalue(), streamed)
+
 
 if __name__ == '__main__':
     unittest.main()
