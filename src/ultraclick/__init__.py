@@ -720,7 +720,6 @@ class OutputFormatter:
 
         previous_handler = signal.signal(signal.SIGINT, interrupt_on_next_ctrl_c)
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        buffer = bytearray()
 
         # Read available bytes without waiting for a newline, from either descriptor type.
         try:
