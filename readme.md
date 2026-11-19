@@ -355,6 +355,10 @@ The formatter is available as `click.output`:
 - `click.output.success(msg)`
 - `click.output.warning(msg)`
 - `click.output.error(msg)`
+- `click.output.image(path)`
+
+`click.output.image(path)` shows a PNG file inline in terminals that support the Kitty graphics protocol. Plain text
+output prints the path instead.
 
 `click.output.silence()` hides formatter messages inside a `with` block. Pass a condition to silence only when it is true:
 
@@ -368,6 +372,9 @@ formatted, colorized terminal view. When stdout or stderr is not a TTY, when `TE
 UltraClick switches to plain text output so agents, scripts, and redirected commands receive simple text.
 
 `ULTRACLICK_PLAIN=1` forces plain text output. `ULTRACLICK_COLORS=1` forces color output.
+
+`click.output.plain` is `True` in plain text output, so CLI code can adapt its own output, for example skip a progress
+display.
 
 ### Running Shell Commands
 

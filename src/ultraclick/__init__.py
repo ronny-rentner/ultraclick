@@ -1,3 +1,4 @@
+import base64
 import contextlib
 import errno
 import inspect
@@ -519,6 +520,8 @@ class OutputFormatter:
 
     lines = 25
     columns = 80
+    # Lets CLI code adapt its own output to the output style UltraClick chose.
+    plain = False
 
     def __init__(self):
         # Rich console should pick up those env variables
@@ -598,6 +601,10 @@ class OutputFormatter:
     def prompt(self, message):
         # Print without newline for user input
         self.console.print(message, end='')
+
+    def image(self, path):
+        payload = base64.b64encode(os.fsencode(os.path.abspath(path))).decode()
+        self.console.print(f"\x1b_Gf=100,t=f,a=T;{payload}\x1b\\", soft_wrap=True)
 
     def silence(self, condition=True):
         """
@@ -771,6 +778,8 @@ class PlainOutputFormatter(OutputFormatter):
     It keeps the same public API as OutputFormatter while rendering only simple text.
     """
 
+    plain = True
+
     def __init__(self):
         if 'LINES' in os.environ:
             self.lines = int(os.environ["LINES"])
@@ -818,6 +827,9 @@ class PlainOutputFormatter(OutputFormatter):
 
     def failure(self, message):
         self.console.print(f"ERROR: {message}")
+
+    def image(self, path):
+        self.console.print(path)
 
 
 
