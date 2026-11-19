@@ -840,6 +840,8 @@ def option(*param_decls, **kwargs):
         # Click passes the value under one of the declared names, so the signature parameter matching one of them holds the default.
         names = [decl.split('/')[0].lstrip('-').replace('-', '_').lower() for decl in param_decls]
         param = next((sig.parameters[name] for name in names if name in sig.parameters), None)
+        if param and param.default != inspect.Parameter.empty and kwargs.get("required"):
+            raise TypeError(f"{func.__qualname__}(): '{param.name}' has the signature default {param.default!r} but its option is required=True.")
         if param and param.default != inspect.Parameter.empty and "default" not in kwargs:
             kwargs["default"] = param.default
             if "show_default" not in kwargs:
@@ -854,8 +856,7 @@ def argument(*param_decls, **kwargs):
     """
     A drop-in replacement for `click.argument` that injects default values
     from the function signature if not explicitly provided.
-    It does NOT alter 'nargs' or 'required'—you (the CLI author) must set them
-    if you want an argument to accept an optional value.
+    An injected default makes the argument optional.
     """
     def decorator(func):
         sig = inspect.signature(func)
@@ -863,6 +864,8 @@ def argument(*param_decls, **kwargs):
 
         param = sig.parameters.get(param_name)
         if param and param.default != inspect.Parameter.empty:
+            if kwargs.get("required"):
+                raise TypeError(f"{func.__qualname__}(): '{param.name}' has the signature default {param.default!r} but its argument is required=True.")
             # Only set default if the user didn't already specify it
             if "default" not in kwargs:
                 kwargs["default"] = param.default

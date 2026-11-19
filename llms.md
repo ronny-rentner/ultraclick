@@ -13,6 +13,7 @@
 - Put group-level options on `__init__`.
 - Put command-local options and arguments on the command method.
 - Prefer putting defaults on the Python function signature instead of in `@click.option(...)`.
+- A signature default makes the parameter optional; UltraClick raises `TypeError` at definition when its option or argument also sets `required=True`.
 - Decorate command methods with `@click.command()`.
 - Use `@click.main_group` for normal CLIs.
 - Use `click.group_from_class(...)` with `__run__` only for very small scripts with no subcommands.
