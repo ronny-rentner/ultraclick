@@ -9,6 +9,7 @@ This demo systematically showcases ultraclick's main features:
 4. Command aliases
 5. Command abbreviations
 6. Automatic return value handling
+7. JSON output through --json
 """
 
 import pathlib
@@ -143,12 +144,16 @@ class MainApp:
     resource = ResourceCommand
 
     @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
+    @click.option("--json", "json_output", is_flag=True, help="Print results as JSON")
     @click.option("--profile", help="Configuration profile to use")
     @click.option("--env",
                  type=click.Choice(['development', 'staging', 'production']),
                  help="Environment to run in")
     @click.version_option(version="1.0")
-    def __init__(self, verbose, profile="default", env="development"):
+    def __init__(self, verbose, json_output, profile="default", env="development"):
+        if json_output:
+            click.use_formatter(click.JsonOutputFormatter)
+
         # The signature is the preferred place for option defaults in UltraClick examples.
         # Store options as instance variables
         self.verbose = verbose
@@ -165,10 +170,10 @@ class MainApp:
 
     @click.command()
     @click.argument("text")
-    @click.option("--preedit", is_flag=True, help="Enable preedit mode")
-    def type(self, text, preedit):
-        """Show the parsed text and preedit flag."""
-        return f"Text: {text}\nPreedit: {preedit}"
+    @click.option("--upper", is_flag=True, help="Print the text in uppercase")
+    def echo(self, text, upper):
+        """Print the given text."""
+        return text.upper() if upper else text
 
     @click.option("--test", is_flag=True, help="Test option")
     @click.command()

@@ -193,19 +193,8 @@ class RichCommand(click.RichCommand):
 
     @staticmethod
     def print_result(result):
-        """Print a return value without replacing it; None produces no output."""
-        if result is not None:
-            if isinstance(result, list):
-                for item in result:
-                    click.echo(item)
-            elif isinstance(result, dict):
-                for key, value in result.items():
-                    if isinstance(value, list):
-                        value = ", ".join(map(str, value))
-                    click.echo(f"{key}: {value}")
-            else:
-                click.echo(result)
-
+        """Print a return value through the output formatter without replacing it."""
+        output.result(result)
         return result
 
 class RichGroup(click.RichGroup):
@@ -236,13 +225,13 @@ class RichGroup(click.RichGroup):
         if ctx.allow_interspersed_args and not ctx.resilient_parsing and args:
             rv.insert(max(0, len(rv) - len(args)), '--')
         #output.info(f"AFT RichGroup.parse_args(group={self.name}) ctx.params={ctx.params} ctx.meta={ctx.meta}")
-        
+
         if self.source_class and self.instance_key and self.instance_key not in ctx.meta:
             # Instantiate the class with parsed options
             instance = self.source_class(**ctx.params)
             ctx.meta[self.instance_key] = instance
             self._discover(instance)
-            
+
         return rv
 
     def _discover(self, instance=None):
@@ -317,10 +306,10 @@ class RichGroup(click.RichGroup):
         if self._help_option is None:
             # Use help_option decorator to create the option with our custom callback
             from click.decorators import help_option
-            
+
             # Apply decorator to self (Command) which adds the param to self.params
             help_option(*help_options, callback=deferred_help_callback)(self)
-            
+
             # Retrieve the last added parameter (which is our help option) and remove it
             # because get_help_option is supposed to return it, not register it permanently
             # (although click core does caching, we just need the object here)
@@ -367,7 +356,7 @@ class RichGroup(click.RichGroup):
                 exc.dying_and_help_printed = True
                 # Prevent the duplicate 'usage' help because we already print it
                 exc.ctx = None
-            
+
             # If help was explicitly requested, suppress the error and exit cleanly
             if ctx.meta.get('ultraclick_help_requested'):
                 ctx.exit(0)
@@ -597,6 +586,20 @@ class OutputFormatter:
 
     def echo(self, message):
         self.console.print(message)
+
+    def result(self, value):
+        """Print a command's return value to stdout; None produces no output."""
+        if value is not None:
+            if isinstance(value, list):
+                for item in value:
+                    click.echo(item)
+            elif isinstance(value, dict):
+                for key, item in value.items():
+                    if isinstance(item, list):
+                        item = ", ".join(map(str, item))
+                    click.echo(f"{key}: {item}")
+            else:
+                click.echo(value)
 
     def prompt(self, message):
         # Print without newline for user input
@@ -832,6 +835,16 @@ class PlainOutputFormatter(OutputFormatter):
         self.console.print(path)
 
 
+class JsonOutputFormatter(PlainOutputFormatter):
+    """
+    Plain text formatter that prints command results as JSON.
+    """
+
+    def result(self, value):
+        if value is not None:
+            click.echo(json.dumps(value, indent=2))
+
+
 
 @wraps(click.option)
 def option(*param_decls, **kwargs):
@@ -915,3 +928,9 @@ output = PlainOutputFormatter() if PLAIN_TEXT_MODE else OutputFormatter()
 
 # Short alias
 run = output.run_command_and_print_output
+
+def use_formatter(formatter_class):
+    """Replace `output` and `run` with a new instance of `formatter_class`."""
+    global output, run
+    output = formatter_class()
+    run = output.run_command_and_print_output

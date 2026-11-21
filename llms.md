@@ -30,6 +30,7 @@
 - Prefer returning values from commands instead of printing manually.
 - Use `click.output.*(...)` only when styled terminal output is required.
 - Check `click.output.plain` to adapt output to plain mode; do not inspect TTYs or environment variables directly.
+- For JSON output, call `click.use_formatter(click.JsonOutputFormatter)`, for example from a `--json` option in `__init__`; do not return `json.dumps(...)` from commands.
 - Use `click.output.image(path)` to show a PNG file; it uses the Kitty graphics protocol, and plain output prints the path instead.
 - `click.output.error/warning/success/failure(...)` print the message as written, so text from exceptions or paths keeps its brackets. `info`, `echo`, `headline` and `prompt` interpret Rich markup; wrap text in `click.output.escape_markup(...)` there to print brackets literally.
 - Use `click.output.run_command(...)` for external commands so UltraClick handles command echoing and output capture.

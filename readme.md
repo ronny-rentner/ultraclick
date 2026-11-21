@@ -51,232 +51,38 @@ pip install -e .
 
 ## Quick Start
 
-The included `demo.py` is a larger example demonstrating global options, nested commands, and aliases.
+A minimal application, saved as `app.py`:
 
 ```python
-"""
-ultraclick Demo Application
-
-This demo systematically showcases ultraclick's main features:
-1. Class-based CLI structure
-2. Nested command groups
-3. Automatic context sharing
-4. Command aliases
-5. Command abbreviations
-6. Automatic return value handling
-"""
-
-import pathlib
-import sys
-
 import ultraclick as click
-from ultraclick import ctx
 
 
-class ConfigCommand:
-    """
-    Configuration commands for the application.
-    Demonstrates context sharing between subcommands.
-
-    This command group shows help when called directly (default behavior).
-    """
-    @click.option("--config-dir", type=pathlib.Path, help="Configuration directory")
-    def __init__(self, config_dir="./config"):
-        # UltraClick can infer the CLI default from the Python signature, so the
-        # decorator only needs the option metadata.
-        # Store parameters as instance variables for sub-commands in this class
-        self.config_dir = config_dir
-
-        # Demo configuration lives for this invocation; resource creation reads its default region here.
-        self.values = {"region": "us-east"}
-
-        # Access shared data from global context
-        self.profile = click.ctx.meta["profile"]
+@click.main_group(name="app")
+class App:
+    """Minimal UltraClick application."""
 
     @click.command()
-    def show(self):
-        """Display current configuration settings."""
-        path_prefix = './' if not self.config_dir.is_absolute() else ''
-        return (
-            f"Active Profile: {self.profile}\n"
-            f"Config Directory: {path_prefix}{self.config_dir}"
-        )
-
-    @click.command()
-    @click.argument("name")
-    @click.argument("value")
-    def set(self, name, value):
-        """Set a configuration value."""
-        self.values[name] = value
-        # Read back through the shared configuration so callers receive the stored value.
-        return ctx.invoke("config.get", name=name)
-
-    # Command alias demonstration
-    update = click.alias(set)
-
-    @click.command()
-    @click.argument("name")
-    def get(self, name):
-        """Get a configuration value."""
-        # Return the value itself so other commands can use it through ctx.invoke().
-        if name not in self.values:
-            raise click.ClickException(f"Unknown configuration value: {name}")
-        return self.values[name]
-
-    # Another command alias
-    fetch = click.alias(get)
-
-
-class ResourceCommand:
-    """
-    Resource management commands.
-    Demonstrates parameter handling and nested command structure.
-
-    This command group performs an action when called directly (no help shown).
-    """
-    @click.option("--resource-type", type=click.Choice(['server', 'database', 'storage']),
-                  help="Type of resource to manage")
-    def __init__(self, resource_type="server"):
-        # The signature carries the default so help output and runtime behavior stay in sync.
-        self.resource_type = resource_type
-
-        # Access shared data from parent command
-        self.profile = click.ctx.meta["profile"]
-
-    def __run__(self):
-        """Show the summary when no resource subcommand is selected."""
-        return (
-            f"Resource Management Summary:\n"
-            f"• Current Resource Type: {self.resource_type}\n"
-            f"• Available Types: server, database, storage\n"
-            f"• Active Profile: {self.profile}"
-        )
-
-    @click.command()
-    @click.argument("name")
-    @click.option("--size", help="Resource size (small, medium, large)")
-    @click.option("--region", help="Deployment region (defaults to config region)")
-    def create(self, name, size="medium", region=None):
-        """Create a new resource."""
-        # Resolve the default through config, initializing that group only when needed.
-        if region is None:
-            region = ctx.invoke("config.get", name="region")
-        # Command defaults live on the method signature for the same reason as group defaults above.
-        # Use the profile from instance state instead of context
-        return (
-            f"Creating {self.resource_type} '{name}'\n"
-            f"Size: {size}\n"
-            f"Region: {region}\n"
-            f"Using profile: {self.profile}"
-        )
-
-    @click.command()
-    @click.argument("name")
-    def delete(self, name):
-        """Delete a resource."""
-        return f"Deleting {self.resource_type} '{name}'"
-
-    @click.command()
-    @click.argument("names", nargs=-1)
-    def list(self, names):
-        """List resources, optionally filtered by name."""
-        # Use instance state for profile
-        if not names:
-            return f"Listing all {self.resource_type}s (Profile: {self.profile})"
-        else:
-            return f"Filtered {self.resource_type} list: {', '.join(names)} (Profile: {self.profile})"
-
-
-@click.main_group(name="demo")
-class MainApp:
-    """
-    Main demo application showcasing ultraclick's features.
-    """
-    # Define nested command groups
-    config = ConfigCommand
-    resource = ResourceCommand
-
-    @click.option("--verbose", is_flag=True, is_eager=True, help="Enable verbose output")
-    @click.option("--profile", help="Configuration profile to use")
-    @click.option("--env",
-                 type=click.Choice(['development', 'staging', 'production']),
-                 help="Environment to run in")
-    @click.version_option(version="1.0")
-    def __init__(self, verbose, profile="default", env="development"):
-        # The signature is the preferred place for option defaults in UltraClick examples.
-        # Store options as instance variables
-        self.verbose = verbose
-        self.profile = profile
-        self.env = env
-
-        # Store settings in global state
-        click.ctx.meta["verbose"] = verbose
-        click.ctx.meta["profile"] = profile
-        click.ctx.meta["env"] = env
-
-        if verbose:
-            click.output.success(f"Verbose mode enabled in {env} environment")
-
-    @click.option("--test", is_flag=True, help="Test option")
-    @click.command()
-    def status(self, test):
-        """Show application status."""
-
-        click.output.headline(f'Demo Status')
-
-        # Capture the interpreter version for the report; --verbose also shows the subprocess execution.
-        runtime = click.output.run_command([sys.executable, "--version"],
-                                           headline="Checking Python version", silent=not self.verbose)
-
-        return (
-            f"Status: Running\n"
-            f"Environment: {self.env}\n"
-            f"Verbose: {self.verbose}\n"
-            f"Profile: {self.profile}\n"
-            f"Runtime: {runtime.stdout.strip()}"
-        )
-
-    # 'info' is an alias for the 'status' command
-    info=click.alias(status)
-
-    @click.command()
-    def testraise(self):
-        click.output.headline(f'Testing Exceptions')
-        raise Exception(f'Testing Exceptions')
+    def version(self):
+        """Show the version."""
+        return "app 1.0"
 
 
 if __name__ == "__main__":
-    MainApp()
+    App()
 ```
-
-### Running the Example
 
 ```console
-$ python demo.py status
-
-→ Demo Status
-Status: Running
-Environment: development
-Verbose: False
-Profile: default
-Runtime: Python 3.13.5
-
-$ python demo.py config show
-Active Profile: default
-Config Directory: ./config
-
-$ python demo.py --profile production resource create mydb --size large
-Creating server 'mydb'
-Size: large
-Region: us-east
-Using profile: production
+$ python app.py version
+app 1.0
 ```
+
+The included [demo.py](./demo.py) is a larger example demonstrating global options, nested commands, aliases, and a
+`--json` option.
 
 ## Help Output
 
 **ultraclick** leverages RichClick to produce beautiful help screens automatically.
 
-### Main Help
 ```
 $ ./demo.py
 
@@ -286,15 +92,19 @@ $ ./demo.py
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --verbose                                    Enable verbose output                                                   │
+│ --json                                       Print results as JSON                                                   │
 │ --profile  TEXT                              Configuration profile to use [default: default]                         │
 │ --env      [development|staging|production]  Environment to run in [default: development]                            │
 │ --version                                    Show the version and exit.                                              │
 │ --help                                       Show this message and exit.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ config      Configuration commands for the application. Demonstrates context sharing between subcommands.            │
-│ resource    Resource management commands. Demonstrates parameter handling and nested command structure.              │
-│ status      Show application status.                                                                                 │
+│ ask          Run a child command that reads a line from the keyboard.                                                │
+│ config       Configuration commands for the application. Demonstrates context sharing between subcommands.           │
+│ echo         Print the given text.                                                                                   │
+│ error        Test error message design                                                                               │
+│ resource     Resource management commands. Demonstrates parameter handling and nested command structure.             │
+│ status       Show application status.                                                                                │
 │ testraise                                                                                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -375,6 +185,17 @@ UltraClick switches to plain text output so agents, scripts, and redirected comm
 
 `click.output.plain` is `True` in plain text output, so CLI code can adapt its own output, for example skip a progress
 display.
+
+`click.output.result(value)` prints a command's return value to stdout: a list one item per line, a dict as `key: value`
+lines, anything else as text. `click.JsonOutputFormatter` prints it as JSON instead and its messages as plain text.
+`click.use_formatter(cls)` replaces `click.output` with a new instance of `cls`, for example for a `--json` option:
+
+```python
+@click.option("--json", "json_output", is_flag=True, help="Print results as JSON")
+def __init__(self, json_output):
+    if json_output:
+        click.use_formatter(click.JsonOutputFormatter)
+```
 
 ### Running Shell Commands
 

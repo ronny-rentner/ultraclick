@@ -51,41 +51,41 @@ class TestDemoCLI(unittest.TestCase):
         self.assertIn("demo", result.stdout.lower())
         self.assertIn("version", result.stdout.lower())
     
-    def test_type_command(self):
-        for args, preedit in ((["type", "hello"], False), (["type", "--", "hello"], False),
-                              (["type", "hello", "--"], False), (["type", "--preedit", "hello"], True)):
+    def test_echo_command(self):
+        for args, expected in ((["echo", "hello"], "hello"), (["echo", "--", "hello"], "hello"),
+                               (["echo", "hello", "--"], "hello"), (["echo", "--upper", "hello"], "HELLO")):
             with self.subTest(args=args):
                 result = self.run_command(args)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, f"Text: hello\nPreedit: {preedit}\n")
+                self.assertEqual(result.stdout, f"{expected}\n")
                 self.assertEqual(result.stderr, "")
 
-    def test_type_literal_arguments_after_double_dash(self):
+    def test_echo_literal_arguments_after_double_dash(self):
         # Option names and additional '--' tokens must all remain literal operands.
-        for args in (["type", "--"], ["ty", "--"], ["--", "type"],
-                     ["--profile", "production", "type", "--"],
-                     ["type", "--profile", "production", "--"]):
-            for text in ("--preedit", "--help", "--profile", "--"):
+        for args in (["echo", "--"], ["ec", "--"], ["--", "echo"],
+                     ["--profile", "production", "echo", "--"],
+                     ["echo", "--profile", "production", "--"]):
+            for text in ("--upper", "--help", "--profile", "--"):
                 with self.subTest(args=args, text=text):
                     result = self.run_command(args + [text])
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stdout, f"Text: {text}\nPreedit: False\n")
+                    self.assertEqual(result.stdout, f"{text}\n")
                     self.assertEqual(result.stderr, "")
 
     def test_separator_keeps_extra_operands(self):
-        # 'type' accepts one operand; treating '--preedit' as an option would hide the extra operand.
-        for args in (["type", "--", "--preedit", "hello"], ["--", "type", "--preedit", "hello"]):
+        # 'echo' accepts one operand; treating '--upper' as an option would hide the extra operand.
+        for args in (["echo", "--", "--upper", "hello"], ["--", "echo", "--upper", "hello"]):
             with self.subTest(args=args):
                 result = self.run_command(args)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("Got unexpected extra argument (hello)", result.stderr)
 
-    def test_type_literal_arguments_with_preedit(self):
-        for text in ("--preedit", "--help", "--profile", "--"):
+    def test_echo_literal_arguments_with_upper(self):
+        for text in ("--upper", "--help", "--profile", "--"):
             with self.subTest(text=text):
-                result = self.run_command(["type", "--preedit", "--", text])
+                result = self.run_command(["echo", "--upper", "--", text])
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, f"Text: {text}\nPreedit: True\n")
+                self.assertEqual(result.stdout, f"{text.upper()}\n")
                 self.assertEqual(result.stderr, "")
 
     def test_nested_literal_arguments_after_double_dash(self):
@@ -189,6 +189,11 @@ class TestDemoCLI(unittest.TestCase):
         result = self.run_command(["config", "get", "region"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "us-east\n")
+
+    def test_json_option_prints_result_as_json(self):
+        result = self.run_command(["--json", "config", "get", "region"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '"us-east"\n')
 
     def test_invoke_requires_group_options(self):
         # A missing group option must fail before its instance is created.
